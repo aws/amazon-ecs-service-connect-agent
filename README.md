@@ -114,7 +114,6 @@ The AppNet Agent supports using a few environment variable to alter some aspects
 
 ### Deprecated
 
-* `APPMESH_RESOURCE_ARN`
 * `APPMESH_RESOURCE_NAME`
 * `APPMESH_VIRTUAL_NODE_NAME`
 
