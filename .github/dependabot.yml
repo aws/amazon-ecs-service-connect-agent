@@ -1,0 +1,19 @@
+# To get started with Dependabot version updates, you'll need to specify which
+# package ecosystems to update and where the package manifests are located.
+# Please see the documentation for all configuration options:
+# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+
+version: 2
+updates:
+- package-ecosystem: gomod
+  directory: "/agent"
+  schedule:
+    interval: weekly
+    time: "09:00"
+  open-pull-requests-limit: 1
+  target-branch: "main"
+  ignore:
+    # aws sdk is explicitly excluded from bot auto upgrade because: (1) currently the auto upgrade of it breaks test, and
+    # the bot stuck at trying to upgrade it; (2) sdk change has higher risk of breaking the agent so probably safer to
+    # upgrade manually.
+    - dependency-name: "github.com/aws/aws-sdk-go"
