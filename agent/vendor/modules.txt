@@ -249,7 +249,7 @@ github.com/sirupsen/logrus
 # github.com/stoewer/go-strcase v1.2.1
 ## explicit; go 1.11
 github.com/stoewer/go-strcase
-# github.com/stretchr/testify v1.8.1
+# github.com/stretchr/testify v1.8.2
 ## explicit; go 1.13
 github.com/stretchr/testify/assert
 # github.com/tidwall/gjson v1.14.4
