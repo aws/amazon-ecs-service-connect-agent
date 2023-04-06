@@ -25,7 +25,7 @@ jobs:
           role-session-name: betarolesession
           aws-region: us-west-2
       - name: Sync up to CodeCommit
-        uses: tsgit18/sync-up-to-codecommit-action@v1.0.6
+        uses: liubnu/sync-up-to-codecommit-action@v1
         with:
           repository_name: GitHubServiceConnectAgent
           aws_region: us-west-2
@@ -46,7 +46,7 @@ jobs:
           role-session-name: prodrolesession
           aws-region: us-west-2
       - name: Sync up to CodeCommit
-        uses: tsgit18/sync-up-to-codecommit-action@v1.0.6
+        uses: liubnu/sync-up-to-codecommit-action@v1
         with:
           repository_name: GitHubServiceConnectAgent
           aws_region: us-west-2
