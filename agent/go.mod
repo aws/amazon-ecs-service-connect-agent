@@ -21,7 +21,7 @@ require (
 	github.com/tidwall/gjson v1.14.4
 	golang.org/x/time v0.3.0
 	google.golang.org/protobuf v1.30.0
-	kernel.org/pub/linux/libs/security/libcap/cap v1.2.67
+	kernel.org/pub/linux/libs/security/libcap/cap v1.2.68
 )
 
 require (
@@ -56,5 +56,5 @@ require (
 	google.golang.org/genproto v0.0.0-20230202175211-008b39050e57 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	kernel.org/pub/linux/libs/security/libcap/psx v1.2.67 // indirect
+	kernel.org/pub/linux/libs/security/libcap/psx v1.2.68 // indirect
 )
