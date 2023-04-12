@@ -259,6 +259,62 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Metrics_
 	assert.Equal(t, expectedResponse, string(resBody))
 }
 
+func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Delta_SingleSnapshot(t *testing.T) {
+	os.Setenv("ENVOY_ADMIN_MODE", config.ENVOY_ADMIN_MODE_DEFAULT)
+	defer os.Unsetenv("ENVOY_ADMIN_MODE")
+
+	result := 0
+	deltaValue := 0
+	// Mock an Envoy server since we are not spawning an Envoy for this unit test
+	envoy := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		sampleStatsOutput := fmt.Sprintf("# TYPE envoy_appmesh_GrpcRequestCount counter\n"+
+			"envoy_appmesh_GrpcRequestCount{Mesh=\"howto-k8s-http2\",VirtualNode=\"client_howto-k8s-http2\"} %d\n", result)
+		io.WriteString(writer, sampleStatsOutput)
+		result += deltaValue
+	}))
+
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	var snapshotter Snapshotter
+	envoyStatsHandler := buildHandlerWithSnapshotter(agentConfig, &snapshotter)
+	assert.Nil(t, snapshotter.Delta)
+
+	// Update EnvoyServer info to honor the mock Envoy server
+	envoyUrl, err := url.Parse(envoy.URL)
+	assert.NoError(t, err)
+	envoyStatsHandler.AgentConfig.EnvoyServerScheme = envoyUrl.Scheme
+	envoyStatsHandler.AgentConfig.EnvoyServerHostName = envoyUrl.Hostname()
+	envoyStatsHandler.AgentConfig.EnvoyServerAdminPort, _ = strconv.Atoi(envoyUrl.Port())
+
+	// Setup an http server that serves stats request
+	statsServer := httptest.NewServer(http.HandlerFunc(envoyStatsHandler.HandleStats))
+	defer statsServer.Close()
+
+	// Manually Snapshot one time to computeDelta
+	statsUrl := getEnvoyStatsUrl(&envoyStatsHandler.AgentConfig, "")
+	snapshotter.HttpClient = client.CreateDefaultRetryableHttpClient()
+	snapshotter.HttpRequest, err = client.CreateRetryableAgentRequest(http.MethodGet, statsUrl, nil)
+	assert.NoError(t, err)
+	// Make one snapshot, then call computeDelta
+	snapshotter.makeSnapshot()
+
+	filterParam := fmt.Sprintf("%s=%s", filterQueryKey, QuerySet[filterQueryKey])
+	requestUrl := fmt.Sprintf("%s?%s&%s&%s", statsServer.URL, filterParam, usedOnlyQueryKey, deltaQueryKey)
+
+	// Expecting Delta value equals to 0 and Delta object equals to the very first snapshot
+	assert.NotNil(t, snapshotter.Delta)
+	assert.Equal(t, snapshotter.Delta, snapshotter.Snapshot)
+	res, err := http.Get(requestUrl)
+	assert.NotNil(t, res)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+	resBody, err := ioutil.ReadAll(res.Body)
+	assert.NoError(t, err)
+	expectedResponse := fmt.Sprintf("\n# TYPE GrpcRequestCount counter\n"+
+		"GrpcRequestCount{Mesh=\"howto-k8s-http2\",VirtualNode=\"client_howto-k8s-http2\"} %d\n", deltaValue)
+	assert.Equal(t, expectedResponse, string(resBody))
+	res.Body.Close()
+}
+
 func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Delta(t *testing.T) {
 	os.Setenv("ENVOY_ADMIN_MODE", config.ENVOY_ADMIN_MODE_DEFAULT)
 	defer os.Unsetenv("ENVOY_ADMIN_MODE")

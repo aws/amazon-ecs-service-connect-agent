@@ -79,22 +79,27 @@ func (snapshotter *Snapshotter) makeSnapshot() {
 		return
 	}
 	if snapshot != nil {
-		// Delta will only be computed when we have two snapshots.
-		// We save or overwrite the newly captured snapshot.
-		if snapshotter.Snapshot != nil {
-			snapshotter.computeDelta(snapshot)
-		}
+		// We will compute the delta and then save or overwrite the newly captured snapshot.
+		snapshotter.computeDelta(snapshot)
 		snapshotter.Snapshot = snapshot
 	}
 }
 
 // computeDelta will compute the delta between the given snapshots.
+// If there is no previously captured snapshot, which means we just got the very first snapshot,
+// we will use the snapshot as the delta value.
 //
 // The dependency library does not support protobuf v2 APIs. See their README: https://github.com/prometheus/client_model
 // Possibly switching to OpenMetrics(https://openmetrics.io/) when it is ready in the future.
 func (snapshotter *Snapshotter) computeDelta(newSnapshot map[string]*io_prometheus_client.MetricFamily) {
-	if snapshotter.Snapshot == nil || newSnapshot == nil {
-		log.Errorf("both snapshots should exist to compute delta")
+	if newSnapshot == nil {
+		log.Errorf("the newSnapshot should exist to compute the snapshot")
+		return
+	}
+
+	if snapshotter.Snapshot == nil {
+		log.Debugf("Using the new snapshot as delta since there is no previously captured snapshot yet.")
+		snapshotter.Delta = newSnapshot
 		return
 	}
 
