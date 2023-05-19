@@ -141,12 +141,20 @@ func CreateStandardAgentHttpRequest(method, requestUrl string, body io.Reader) (
 	return request, nil
 }
 
-func RetryErrorHandler(resp *http.Response, err error, attempt int) (retryResponse *http.Response, retryError error) {
-	if resp != nil && resp.StatusCode < 600 && resp.StatusCode >= 100 {
-		retryError = fmt.Errorf("giving up after %d attempt(s), error: %v, status: %v", attempt, err, resp.Status)
-	} else {
-		retryError = fmt.Errorf("giving up after %d attempt(s), error: %v", attempt, err)
+func RetryErrorHandler(resp *http.Response, err error, attempt int) (*http.Response, error) {
+	// ErrorHandler is called if retries are expired, containing the last status from the http library.
+	// If not specified, default behavior for the library is to close the body and return an error indicating how many tries were attempted.
+	// If overriding this, be sure to close the body if needed.
+	// https://pkg.go.dev/github.com/hashicorp/go-retryablehttp#ErrorHandler
+	//
+	// Only one of resp and err will be non-nil. When resp is present we return the status;
+	// when error is present, we return that.
+	var errorMsg string
+	if resp != nil {
+		resp.Body.Close()
+		errorMsg = fmt.Sprintf("status: %v", resp.Status)
+	} else if err != nil {
+		errorMsg = fmt.Sprintf("error: %v", err)
 	}
-	retryResponse = resp
-	return
+	return resp, fmt.Errorf("giving up after %d attempt(s): %s", attempt, errorMsg)
 }

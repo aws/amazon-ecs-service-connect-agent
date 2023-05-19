@@ -63,15 +63,6 @@ var (
 	}
 )
 
-type GetStatsError struct {
-	StatusCode int
-	Err        error
-}
-
-func (e *GetStatsError) Error() string {
-	return fmt.Sprintf("error getting stats: %s, status code: %d", e.Err.Error(), e.StatusCode)
-}
-
 func (envoyPrometheusStatsHandler *EnvoyPrometheusStatsHandler) HandleStats(resWriter http.ResponseWriter, request *http.Request) {
 	if !envoyPrometheusStatsHandler.Limiter.Allow() {
 		http.Error(resWriter, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
@@ -129,32 +120,22 @@ func (envoyPrometheusStatsHandler *EnvoyPrometheusStatsHandler) HandleStats(resW
 	log.Debugf("Stats request took: %vms", duration.Milliseconds())
 
 	if err != nil {
-		errorMsg := fmt.Sprintf("unable to reach Envoy Admin: %s", err)
-		log.Error(errorMsg)
-		// Valid status code range is [100, 600)
-		if statsResponse != nil && statsResponse.StatusCode < 600 && statsResponse.StatusCode >= 100 {
-			http.Error(resWriter, errorMsg, statsResponse.StatusCode)
-		} else {
-			http.Error(resWriter, errorMsg, http.StatusInternalServerError)
-		}
-		return
-	}
-
-	if statsResponse == nil {
-		resWriter.WriteHeader(http.StatusNoContent)
-		log.Debug("empty response from Envoy stat endpoint")
+		log.Errorf("Call to fetch stats from Envoy admin failed: %s", err)
+		http.Error(resWriter, "Failed to fetch stats from Envoy", http.StatusInternalServerError)
 		return
 	}
 
 	if statsResponse.StatusCode != http.StatusOK {
-		http.Error(resWriter, fmt.Sprintf("Envoy response not OK, error code: %v", statsResponse.StatusCode), statsResponse.StatusCode)
+		log.Errorf("Envoy stats response status code not OK: %v", statsResponse.Status)
+		http.Error(resWriter, "Failed to fetch stats from Envoy", http.StatusInternalServerError)
 		return
 	}
 
 	defer statsResponse.Body.Close()
 	responseBody, err := ioutil.ReadAll(statsResponse.Body)
 	if err != nil {
-		http.Error(resWriter, fmt.Sprintf("unable to read stats response from Envoy: %s", err), http.StatusInternalServerError)
+		log.Errorf("Failed to read stats response retreived from Envoy admin: %v", err)
+		http.Error(resWriter, "Failed to fetch stats from Envoy", http.StatusInternalServerError)
 		return
 	}
 	// Directly write the response if there is no filter query
