@@ -13,7 +13,7 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.7.2
 	github.com/nsf/jsondiff v0.0.0-20200515183724-f29ed568f4ce
 	github.com/prometheus/client_golang v1.15.0
-	github.com/prometheus/client_model v0.3.0
+	github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common v0.42.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stoewer/go-strcase v1.3.0
