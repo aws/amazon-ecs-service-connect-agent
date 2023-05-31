@@ -131,7 +131,7 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Failure_Envoy_Internal_Error(t 
 	res, err := http.Get(statsServer.URL)
 
 	assert.NotNil(t, res)
-	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
+	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
 
 	defer res.Body.Close()
 }

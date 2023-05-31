@@ -247,22 +247,18 @@ func getStatsFromEnvoy(httpClient *retryablehttp.Client, request *retryablehttp.
 	log.Debugf("Stats request took: %vms", duration.Milliseconds())
 
 	if err != nil {
-		// Valid status code range is [100, 600)
-		if statsResponse != nil && statsResponse.StatusCode < 600 && statsResponse.StatusCode >= 100 {
-			return nil, &GetStatsError{statsResponse.StatusCode, fmt.Errorf("unable to reach Envoy Admin: %v", err)}
-		} else {
-			return nil, &GetStatsError{http.StatusInternalServerError, fmt.Errorf("unable to reach Envoy Admin, %v. Status: %v, error code: %v", err, statsResponse.Status, statsResponse.StatusCode)}
-		}
+		return nil, fmt.Errorf("call to fetch stats from Envoy admin failed: %v", err)
 	}
-	if statsResponse == nil {
-		errMsg := "stats response is empty"
-		log.Errorf(errMsg)
-		return nil, &GetStatsError{http.StatusNoContent, fmt.Errorf(errMsg)}
-	}
+
 	defer statsResponse.Body.Close()
+
+	if statsResponse.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("envoy stats response status code not OK, error code: %v", statsResponse.StatusCode)
+	}
+
 	resBody, err := ioutil.ReadAll(statsResponse.Body)
 	if err != nil {
-		return resBody, &GetStatsError{http.StatusInternalServerError, fmt.Errorf("unable to read response: %v", err)}
+		return resBody, fmt.Errorf("failed to read stats response retrieved from Envoy admin: %v", err)
 	}
 	return resBody, nil
 }
