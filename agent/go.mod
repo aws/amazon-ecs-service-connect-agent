@@ -17,7 +17,7 @@ require (
 	github.com/prometheus/common v0.43.0
 	github.com/sirupsen/logrus v1.9.2
 	github.com/stoewer/go-strcase v1.3.0
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.8.3
 	github.com/tidwall/gjson v1.14.4
 	golang.org/x/time v0.3.0
 	google.golang.org/protobuf v1.30.0
