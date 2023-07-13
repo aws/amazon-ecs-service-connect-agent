@@ -41,6 +41,22 @@ func setup() {
 	os.Clearenv()
 }
 
+type mockEnvoyCLI struct {
+	version string
+	err     error
+}
+
+func newMockEnvoyCLI(version string, err error) *mockEnvoyCLI {
+	return &mockEnvoyCLI{version: version, err: err}
+}
+
+func (e *mockEnvoyCLI) get(args ...string) (string, error) {
+	if args[0] == "--version" {
+		return e.version, e.err
+	}
+	return "", e.err
+}
+
 type mockFileUtil struct {
 	data []byte
 	path string
@@ -149,7 +165,7 @@ func TestGetRegionalXdsEndpoint_EndpointSet(t *testing.T) {
 	setup()
 	os.Setenv("APPMESH_XDS_ENDPOINT", "foo")
 	defer os.Unsetenv("APPMESH_XDS_ENDPOINT")
-	v, err := getRegionalXdsEndpoint("us-west-2")
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("BoringSSL", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -158,7 +174,7 @@ func TestGetRegionalXdsEndpoint_EndpointSet(t *testing.T) {
 
 func TestGetRegionalXdsEndpoint(t *testing.T) {
 	setup()
-	v, err := getRegionalXdsEndpoint("us-west-2")
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("BoringSSL", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -167,7 +183,7 @@ func TestGetRegionalXdsEndpoint(t *testing.T) {
 
 func TestGetRegionalXdsEndpoint_China(t *testing.T) {
 	setup()
-	v, err := getRegionalXdsEndpoint("cn-north-1")
+	v, err := getRegionalXdsEndpoint("cn-north-1", newMockEnvoyCLI("BoringSSL", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -178,7 +194,7 @@ func TestGetRegionalXdsEndpoint_Preview(t *testing.T) {
 	setup()
 	os.Setenv("APPMESH_PREVIEW", "1")
 	defer os.Unsetenv("APPMESH_PREVIEW")
-	v, err := getRegionalXdsEndpoint("us-west-2")
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("BoringSSL", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -189,7 +205,7 @@ func TestGetRegionalXdsEndpoint_Dualstack(t *testing.T) {
 	setup()
 	os.Setenv("APPMESH_DUALSTACK_ENDPOINT", "1")
 	defer os.Unsetenv("APPMESH_DUALSTACK_ENDPOINT")
-	v, err := getRegionalXdsEndpoint("us-west-2")
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("BoringSSL", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -200,31 +216,56 @@ func TestGetRegionalXdsEndpoint_China_Dualstack(t *testing.T) {
 	setup()
 	os.Setenv("APPMESH_DUALSTACK_ENDPOINT", "1")
 	defer os.Unsetenv("APPMESH_DUALSTACK_ENDPOINT")
-	v, err := getRegionalXdsEndpoint("cn-north-1")
+	v, err := getRegionalXdsEndpoint("cn-north-1", newMockEnvoyCLI("BoringSSL", nil))
 	if err != nil {
 		t.Error(err)
 	}
 	assertEquals(t, "appmesh-envoy-management.cn-north-1.api.amazonwebservices.com.cn:443", *v)
 }
 
-func TestGetRegionalXdsEndpoint_China_Dualstack_Preview(t *testing.T) {
+func TestGetRegionalXdsEndpoint_Dualstack_Preview(t *testing.T) {
 	setup()
 	os.Setenv("APPMESH_DUALSTACK_ENDPOINT", "1")
 	os.Setenv("APPMESH_PREVIEW", "1")
 	defer os.Unsetenv("APPMESH_DUALSTACK_ENDPOINT")
 	defer os.Unsetenv("APPMESH_PREVIEW")
-	v, err := getRegionalXdsEndpoint("us-west-2")
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("BoringSSL", nil))
 	if err != nil {
 		t.Error(err)
 	}
 	assertEquals(t, "appmesh-preview-envoy-management.us-west-2.api.aws:443", *v)
 }
 
-func TestGetRegionalXdsEndpoint_Fips(t *testing.T) {
+func TestGetRegionalXdsEndpoint_Not_Fips(t *testing.T) {
 	setup()
-	os.Setenv("APPMESH_FIPS_ENDPOINT", "1")
-	defer os.Unsetenv("APPMESH_FIPS_ENDPOINT")
-	v, err := getRegionalXdsEndpoint("us-west-2")
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("AWS-LC", nil))
+	if err != nil {
+		t.Error(err)
+	}
+	assertEquals(t, "appmesh-envoy-management.us-west-2.amazonaws.com:443", *v)
+}
+
+func TestGetRegionalXdsEndpoint_AWS_LC_Fips(t *testing.T) {
+	setup()
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("AWS-LC-FIPS", nil))
+	if err != nil {
+		t.Error(err)
+	}
+	assertEquals(t, "appmesh-envoy-management-fips.us-west-2.amazonaws.com:443", *v)
+}
+
+func TestGetRegionalXdsEndpoint_EnvoyCLI_Fail(t *testing.T) {
+	setup()
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("", fmt.Errorf("/usr/bin/envoy: No such file or directory")))
+	if err != nil {
+		t.Error(err)
+	}
+	assertEquals(t, "appmesh-envoy-management.us-west-2.amazonaws.com:443", *v)
+}
+
+func TestGetRegionalXdsEndpoint_BoringSSL_Fips(t *testing.T) {
+	setup()
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("BoringSSL-FIPS", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -233,11 +274,9 @@ func TestGetRegionalXdsEndpoint_Fips(t *testing.T) {
 
 func TestGetRegionalXdsEndpoint_Fips_Dualstack(t *testing.T) {
 	setup()
-	os.Setenv("APPMESH_FIPS_ENDPOINT", "1")
 	os.Setenv("APPMESH_DUALSTACK_ENDPOINT", "1")
-	defer os.Unsetenv("APPMESH_FIPS_ENDPOINT")
 	defer os.Unsetenv("APPMESH_DUALSTACK_ENDPOINT")
-	v, err := getRegionalXdsEndpoint("us-west-2")
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("AWS-LC-FIPS", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -247,12 +286,10 @@ func TestGetRegionalXdsEndpoint_Fips_Dualstack(t *testing.T) {
 func TestGetRegionalXdsEndpoint_Preview_Fips_Dualstack(t *testing.T) {
 	setup()
 	os.Setenv("APPMESH_PREVIEW", "1")
-	os.Setenv("APPMESH_FIPS_ENDPOINT", "1")
 	os.Setenv("APPMESH_DUALSTACK_ENDPOINT", "1")
-	defer os.Unsetenv("APPMESH_FIPS_ENDPOINT")
 	defer os.Unsetenv("APPMESH_DUALSTACK_ENDPOINT")
 	defer os.Unsetenv("APPMESH_PREVIEW")
-	v, err := getRegionalXdsEndpoint("us-west-2")
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("AWS-LC-FIPS", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -261,10 +298,8 @@ func TestGetRegionalXdsEndpoint_Preview_Fips_Dualstack(t *testing.T) {
 func TestGetRegionalXdsEndpoint_Preview_Fips(t *testing.T) {
 	setup()
 	os.Setenv("APPMESH_PREVIEW", "1")
-	os.Setenv("APPMESH_FIPS_ENDPOINT", "1")
-	defer os.Unsetenv("APPMESH_FIPS_ENDPOINT")
 	defer os.Unsetenv("APPMESH_PREVIEW")
-	v, err := getRegionalXdsEndpoint("us-west-2")
+	v, err := getRegionalXdsEndpoint("us-west-2", newMockEnvoyCLI("AWS-LC-FIPS", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -1791,7 +1826,7 @@ func TestBootstrap(t *testing.T) {
 	os.Setenv("APPMESH_RESOURCE_ARN", "mesh/foo/virtualNode/bar")
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
-	if _, err := bootstrap(agentConfig, newMockFileUtil([]byte{}, fmt.Errorf("should not call this function"))); err != nil {
+	if _, err := bootstrap(agentConfig, newMockFileUtil([]byte{}, fmt.Errorf("should not call this function")), newMockEnvoyCLI("", nil)); err != nil {
 		t.Error(err)
 	}
 }
@@ -1805,7 +1840,8 @@ func TestBootstrap_NullTracingConfigFile(t *testing.T) {
 	agentConfig.SetDefaults()
 	// mocking FileUtil doesn't return error when file is empty , but still expect error after parsing.
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
-	b, err := bootstrap(agentConfig, mockFileUtil)
+	mockEnvoyCLI := newMockEnvoyCLI("", nil)
+	b, err := bootstrap(agentConfig, mockFileUtil, mockEnvoyCLI)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1821,9 +1857,10 @@ func TestBootstrap_NullStatsConfigFile(t *testing.T) {
 	os.Setenv("ENVOY_STATS_CONFIG_FILE", "/dev/null")
 	// mocking FileUtil doesn't return error when file is empty , but still expect error after parsing.
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
+	mockEnvoyCLI := newMockEnvoyCLI("", nil)
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
-	b, err := bootstrap(agentConfig, mockFileUtil)
+	b, err := bootstrap(agentConfig, mockFileUtil, mockEnvoyCLI)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1839,9 +1876,10 @@ func TestBootstrap_NullStatsSinksConfigFile(t *testing.T) {
 	os.Setenv("ENVOY_STATS_SINKS_CFG_FILE", "/dev/null")
 	// mocking FileUtil doesn't return error when file is empty , but still expect error after parsing.
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
+	mockEnvoyCLI := newMockEnvoyCLI("", nil)
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
-	b, err := bootstrap(agentConfig, mockFileUtil)
+	b, err := bootstrap(agentConfig, mockFileUtil, mockEnvoyCLI)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1857,7 +1895,7 @@ func TestBootstrap_WithSdsSocketPath(t *testing.T) {
 	os.Setenv("APPMESH_SDS_SOCKET_PATH", "/path/to/socket")
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
-	_, err := bootstrap(agentConfig, newMockFileUtil([]byte{}, fmt.Errorf("should not call this function")))
+	_, err := bootstrap(agentConfig, newMockFileUtil([]byte{}, fmt.Errorf("should not call this function")), newMockEnvoyCLI("", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -1870,7 +1908,7 @@ func TestBootstrap_WithEnableEnvoyStatsTag(t *testing.T) {
 	os.Setenv("ENABLE_ENVOY_STATS_TAGS", "1")
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
-	_, err := bootstrap(agentConfig, newMockFileUtil([]byte{}, fmt.Errorf("should not call this function")))
+	_, err := bootstrap(agentConfig, newMockFileUtil([]byte{}, fmt.Errorf("should not call this function")), newMockEnvoyCLI("", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -1883,7 +1921,7 @@ func TestBootstrap_WithStatsFlushInterval(t *testing.T) {
 	os.Setenv("ENVOY_STATS_FLUSH_INTERVAL", "15s")
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
-	_, err := bootstrap(agentConfig, newMockFileUtil([]byte{}, fmt.Errorf("should not call this function")))
+	_, err := bootstrap(agentConfig, newMockFileUtil([]byte{}, fmt.Errorf("should not call this function")), newMockEnvoyCLI("", nil))
 	if err != nil {
 		t.Error(err)
 	}
@@ -1896,7 +1934,7 @@ func TestBootstrap_WithEnableEnvoyDogStatsd(t *testing.T) {
 	os.Setenv("ENABLE_ENVOY_DOG_STATSD", "1")
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
-	_, err := bootstrap(agentConfig, newMockFileUtil([]byte{}, fmt.Errorf("should not call this function")))
+	_, err := bootstrap(agentConfig, newMockFileUtil([]byte{}, fmt.Errorf("should not call this function")), newMockEnvoyCLI("", nil))
 	if err != nil {
 		t.Error(err)
 	}
