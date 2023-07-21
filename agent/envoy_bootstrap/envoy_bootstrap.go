@@ -81,6 +81,18 @@ const (
 	envoyRdsRouteConf           = ".*?\\.ingress\\.\\w+?\\.[0-9]+?\\.rds\\.((.*?)\\.)(.+?)$"
 )
 
+type EnvoyCLI interface {
+	run(args ...string) (string, error)
+}
+
+type envoyCLI struct {
+	CommandPath string
+}
+
+func (e *envoyCLI) run(args ...string) (string, error) {
+	return platforminfo.RunCommand(e.CommandPath, args...)
+}
+
 type FileUtil interface {
 	Read(path string) ([]byte, error)
 	Write(path string, data []byte, perm fs.FileMode) error
@@ -249,7 +261,7 @@ func getXdsDomain(region string, dualstack bool) string {
 	}
 }
 
-func getRegionalXdsEndpoint(region string) (*string, error) {
+func getRegionalXdsEndpoint(region string, envoyCLIInst EnvoyCLI) (*string, error) {
 	xdsEndpoint := env.Get("APPMESH_XDS_ENDPOINT")
 	if xdsEndpoint != "" {
 		return &xdsEndpoint, nil
@@ -262,10 +274,14 @@ func getRegionalXdsEndpoint(region string) (*string, error) {
 	if err != nil {
 		return nil, err
 	}
-	fips, err := env.Truthy("APPMESH_FIPS_ENDPOINT")
+
+	version, err := envoyCLIInst.run("--version")
 	if err != nil {
-		return nil, err
+		log.Warnf("Could not determine envoy version: %v", err)
+		version = "unknown"
 	}
+	fips := strings.Contains(strings.ToLower(version), "fips")
+
 	if preview && fips {
 		v := fmt.Sprintf("appmesh-preview-envoy-management-fips.%s.%s:443", region, getXdsDomain(region, dualstack))
 		return &v, nil
@@ -1391,7 +1407,7 @@ func buildMetadataForNode() (*structpb.Struct, error) {
 	return structpb.NewStruct(metadata)
 }
 
-func bootstrap(agentConfig config.AgentConfig, fileUtil FileUtil) (*boot.Bootstrap, error) {
+func bootstrap(agentConfig config.AgentConfig, fileUtil FileUtil, envoyCLIInst EnvoyCLI) (*boot.Bootstrap, error) {
 	// Generate new config
 
 	id, err := getNodeId()
@@ -1416,7 +1432,8 @@ func bootstrap(agentConfig config.AgentConfig, fileUtil FileUtil) (*boot.Bootstr
 		if err != nil {
 			return nil, err
 		}
-		xdsEndpoint, err := getRegionalXdsEndpoint(region)
+
+		xdsEndpoint, err := getRegionalXdsEndpoint(region, envoyCLIInst)
 		if err != nil || xdsEndpoint == nil {
 			return nil, err
 		}
@@ -1495,7 +1512,8 @@ func bootstrap(agentConfig config.AgentConfig, fileUtil FileUtil) (*boot.Bootstr
 
 func GetBootstrapYaml(agentConfig config.AgentConfig) (string, error) {
 	fileUtilInst := &fileUtil{}
-	b, err := bootstrap(agentConfig, fileUtilInst)
+	envoyCLIInst := &envoyCLI{agentConfig.CommandPath}
+	b, err := bootstrap(agentConfig, fileUtilInst, envoyCLIInst)
 	if err != nil {
 		log.Errorf("Cannot generate bootstrap config. %v", err)
 		return "", err

@@ -108,7 +108,6 @@ These environment variables offer controls for the bootstrap config generation f
 |`ENVOY_RESOURCES_CONFIG_FILE`	|/usr/local/etc/resources.yaml	|Location for providing additional resources to be applied on the bootstrap configuration file.  If this is specified the Agent will concatenate the resources with the default resources that are generated.	|	|
 |`APPMESH_RESOURCE_CLUSTER`	|	|By default App Mesh uses the name of the resource you specified in `APPMESH_RESOURCE_ARN` when Envoy is referring to itself in metrics and traces. You can override this behavior by setting the `APPMESH_RESOURCE_CLUSTER` environment variable with your own name. This variable can only be used with version `1.15.0` or later of the Envoy image.	|	|
 |`APPMESH_XDS_ENDPOINT`	|hostname.aws:1234	|Envoy's configuration endpoint with port	| `appmesh-envoy-management.$AWS_REGION.amazonaws.com:443`	|
-|`APPMESH_FIPS_ENDPOINT`  | <0 &#124; 1>	|Enables the App Mesh FIPS Endpoint.	|	|
 |`APPMESH_SIGNING_NAME`  | appmesh | The service signing name for Aws request signing filter. | appmesh |
 |`APPMESH_SET_TRACING_DECISION`	|<true &#124; false>	|Controls whether Envoy modifies the `x-request-id` header appearing in a request from a client	|TRUE	|
 |`ENVOY_NO_EXTENSION_LOOKUP_BY_NAME`	|<true &#124; false>	|Controls whether Envoy needs type URL to lookup extensions regardless of the name field. If the type URL is missing it will reject (NACK) the configuration	|true	|

@@ -146,12 +146,12 @@ func buildMetadataForEcsPlatform(mapping map[string]interface{}) {
 func buildMetadataFromSystemInfo(mapping map[string]interface{}) {
 	// System information
 	systemInfo := make(map[string]interface{})
-	if platform, err := runCommand("uname", "-p"); err != nil {
+	if platform, err := RunCommand("uname", "-p"); err != nil {
 		log.Errorf("Unable to get system platform info: %v", err)
 	} else {
 		systemInfo[sysPlatformKey] = platform
 	}
-	if kernelVersion, err := runCommand("uname", "-r"); err != nil {
+	if kernelVersion, err := RunCommand("uname", "-r"); err != nil {
 		log.Errorf("Unable to get system kernel version: %v", err)
 	} else {
 		systemInfo[sysKernelVersionKey] = kernelVersion
@@ -350,7 +350,7 @@ func getEc2InstanceMetadata(query string) (string, error) {
 	}
 }
 
-func runCommand(name string, args ...string) (string, error) {
+func RunCommand(name string, args ...string) (string, error) {
 	var out bytes.Buffer
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = &out
