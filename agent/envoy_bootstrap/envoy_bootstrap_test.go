@@ -50,7 +50,7 @@ func newMockEnvoyCLI(version string, err error) *mockEnvoyCLI {
 	return &mockEnvoyCLI{version: version, err: err}
 }
 
-func (e *mockEnvoyCLI) get(args ...string) (string, error) {
+func (e *mockEnvoyCLI) run(args ...string) (string, error) {
 	if args[0] == "--version" {
 		return e.version, e.err
 	}

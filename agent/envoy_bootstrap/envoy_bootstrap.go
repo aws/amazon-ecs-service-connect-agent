@@ -82,14 +82,14 @@ const (
 )
 
 type EnvoyCLI interface {
-	get(args ...string) (string, error)
+	run(args ...string) (string, error)
 }
 
 type envoyCLI struct {
 	CommandPath string
 }
 
-func (e *envoyCLI) get(args ...string) (string, error) {
+func (e *envoyCLI) run(args ...string) (string, error) {
 	return platforminfo.RunCommand(e.CommandPath, args...)
 }
 
@@ -275,7 +275,7 @@ func getRegionalXdsEndpoint(region string, envoyCLIInst EnvoyCLI) (*string, erro
 		return nil, err
 	}
 
-	version, err := envoyCLIInst.get("--version")
+	version, err := envoyCLIInst.run("--version")
 	if err != nil {
 		log.Warnf("Could not determine envoy version: %v", err)
 		version = "unknown"
