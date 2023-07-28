@@ -261,6 +261,26 @@ func getXdsDomain(region string, dualstack bool) string {
 	}
 }
 
+func useXdsEndpointWithFipsSuffix(region string, envoyCLIInst EnvoyCLI) (bool, error) {
+	version, err := envoyCLIInst.run("--version")
+	if err != nil {
+		log.Warnf("Could not determine envoy version: %v", err)
+		version = "unknown"
+	}
+	// In GovCloud regions the FIPS xDS endpoint will not contain the suffix `-fips`.
+	if strings.HasPrefix(region, "us-gov-") {
+		// Meanwhile, error if the image in GovCloud is not FIPS compatible.
+		if !strings.Contains(strings.ToLower(version), "fips") {
+			return false, fmt.Errorf("envoy version: %s is not FIPS compatible for region %s", version, region)
+		}
+		return false, nil
+	} else {
+		// For AWS Commercial regions in US & CA the FIPS xDS endpoint will contain the suffix `-fips`.
+		// Note that the FIPS image will fail to connect to xDS endpoint in regions without a FIPS endpoint.
+		return strings.Contains(strings.ToLower(version), "fips"), nil
+	}
+}
+
 func getRegionalXdsEndpoint(region string, envoyCLIInst EnvoyCLI) (*string, error) {
 	xdsEndpoint := env.Get("APPMESH_XDS_ENDPOINT")
 	if xdsEndpoint != "" {
@@ -274,13 +294,12 @@ func getRegionalXdsEndpoint(region string, envoyCLIInst EnvoyCLI) (*string, erro
 	if err != nil {
 		return nil, err
 	}
-
-	version, err := envoyCLIInst.run("--version")
+	// Below call will check if xDS endpoint is to be used with `-fips` suffix.
+	// Also, for US GovCloud region it will verfiy if the image is FIPS compatible.
+	fips, err := useXdsEndpointWithFipsSuffix(region, envoyCLIInst)
 	if err != nil {
-		log.Warnf("Could not determine envoy version: %v", err)
-		version = "unknown"
+		return nil, err
 	}
-	fips := strings.Contains(strings.ToLower(version), "fips")
 
 	if preview && fips {
 		v := fmt.Sprintf("appmesh-preview-envoy-management-fips.%s.%s:443", region, getXdsDomain(region, dualstack))

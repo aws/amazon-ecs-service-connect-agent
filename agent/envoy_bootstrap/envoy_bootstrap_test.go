@@ -272,6 +272,21 @@ func TestGetRegionalXdsEndpoint_BoringSSL_Fips(t *testing.T) {
 	assertEquals(t, "appmesh-envoy-management-fips.us-west-2.amazonaws.com:443", *v)
 }
 
+func TestGetGovCloudRegionalXdsEndpoint_AWS_LC_Fips(t *testing.T) {
+	setup()
+	v, err := getRegionalXdsEndpoint("us-gov-east-1", newMockEnvoyCLI("AWS-LC-FIPS", nil))
+	if err != nil {
+		t.Error(err)
+	}
+	assertEquals(t, "appmesh-envoy-management.us-gov-east-1.amazonaws.com:443", *v)
+}
+
+func TestGetGovCloudRegionalXdsEndpoint_BoringSSL(t *testing.T) {
+	setup()
+	v, err := getRegionalXdsEndpoint("us-gov-west-1", newMockEnvoyCLI("BoringSSL", nil))
+	assertError(t, v, err)
+}
+
 func TestGetRegionalXdsEndpoint_Fips_Dualstack(t *testing.T) {
 	setup()
 	os.Setenv("APPMESH_DUALSTACK_ENDPOINT", "1")
@@ -281,6 +296,17 @@ func TestGetRegionalXdsEndpoint_Fips_Dualstack(t *testing.T) {
 		t.Error(err)
 	}
 	assertEquals(t, "appmesh-envoy-management-fips.us-west-2.api.aws:443", *v)
+}
+
+func TestGetGovCloudRegionalXdsEndpoint_Fips_Dualstack(t *testing.T) {
+	setup()
+	os.Setenv("APPMESH_DUALSTACK_ENDPOINT", "1")
+	defer os.Unsetenv("APPMESH_DUALSTACK_ENDPOINT")
+	v, err := getRegionalXdsEndpoint("us-gov-west-1", newMockEnvoyCLI("AWS-LC-FIPS", nil))
+	if err != nil {
+		t.Error(err)
+	}
+	assertEquals(t, "appmesh-envoy-management.us-gov-west-1.api.aws:443", *v)
 }
 
 func TestGetRegionalXdsEndpoint_Preview_Fips_Dualstack(t *testing.T) {
