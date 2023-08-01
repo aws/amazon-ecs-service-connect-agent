@@ -114,6 +114,7 @@ These environment variables offer controls for the bootstrap config generation f
 |`ENVOY_NO_EXTENSION_LOOKUP_BY_NAME`	|<true &#124; false>	|Controls whether Envoy needs type URL to lookup extensions regardless of the name field. If the type URL is missing it will reject (NACK) the configuration	|true	|
 |`ENVOY_ENABLE_TCP_POOL_IDLE_TIMEOUT`	|<true &#124; false>	|Controls whether the `idle_timeout` protocol options feature is enabled for TCP upstreams. If not configured the default `idle_timeout` is 10 minutes. Set this environment variable to `false` to disable `idle_timeout` option.	|true	|
 |`ENVOY_SANITIZE_ORIGINAL_PATH`	|<true &#124; false>	|Controls whether to sanitize `x-envoy-original-path` coming from an untrusted users. Set this environment variable to `false` to not sanitize `x-envoy-original-path` header coming from untrusted users.	|true	|
+|`ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST`	|<true &#124; false>	|Controls whether, if active HC is enabled and a host is ejected by outlier detection, a successful active health check unejects the host and consider it healthy. This also clears all the outlier detection counters.	|false	|
 |`APPMESH_SDS_SOCKET_PATH`	|/path/to/socket	|Unix Domain Socket for SDS Based TLS.	|	|
 |`APPMESH_PREVIEW`	|<0 &#124; 1>	|Enables the App Mesh Preview Endpoint	|	|
 |`APPMESH_DUALSTACK_ENDPOINT`	|<0 &#124; 1>	|Enables the App Mesh Dual-Stack Endpoint	|	|
