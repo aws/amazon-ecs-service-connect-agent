@@ -669,6 +669,7 @@ layers:
       envoy.reloadable_features.no_extension_lookup_by_name: true
       envoy.reloadable_features.tcp_pool_idle_timeout: true
       envoy.reloadable_features.sanitize_original_path: true
+      envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -692,6 +693,7 @@ layers:
       envoy.reloadable_features.no_extension_lookup_by_name: true
       envoy.reloadable_features.tcp_pool_idle_timeout: true
       envoy.reloadable_features.sanitize_original_path: true
+      envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -715,6 +717,7 @@ layers:
       envoy.reloadable_features.no_extension_lookup_by_name: false
       envoy.reloadable_features.tcp_pool_idle_timeout: true
       envoy.reloadable_features.sanitize_original_path: true
+      envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -738,6 +741,7 @@ layers:
       envoy.reloadable_features.no_extension_lookup_by_name: true
       envoy.reloadable_features.tcp_pool_idle_timeout: false
       envoy.reloadable_features.sanitize_original_path: true
+      envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -761,6 +765,31 @@ layers:
       envoy.reloadable_features.no_extension_lookup_by_name: true
       envoy.reloadable_features.tcp_pool_idle_timeout: true
       envoy.reloadable_features.sanitize_original_path: false
+      envoy.reloadable_features.successful_active_health_check_uneject_host: false
+      re2.max_program_size.error_level: 1000
+  - name: "admin_layer"
+    adminLayer: {}
+`)
+}
+
+func TestBuildLayeredRuntime_ActiveHealthcheckUnejectHost(t *testing.T) {
+	setup()
+	os.Setenv("ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST", "true")
+	defer os.Unsetenv("ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST")
+	rt, err := buildLayeredRuntime()
+	if err != nil {
+		t.Error(err)
+	}
+	checkMessage(t, rt, `
+layers:
+  - name: "static_layer_0"
+    staticLayer:
+      envoy.features.enable_all_deprecated_features: true
+      envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
+      envoy.reloadable_features.no_extension_lookup_by_name: true
+      envoy.reloadable_features.tcp_pool_idle_timeout: true
+      envoy.reloadable_features.sanitize_original_path: true
+      envoy.reloadable_features.successful_active_health_check_uneject_host: true
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}

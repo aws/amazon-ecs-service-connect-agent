@@ -132,6 +132,11 @@ func getRuntimeConfigLayer0() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	setActiveHealthCheckUnejectHost, err := env.TruthyOrElse("ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST", false)
+	if err != nil {
+		return nil, err
+	}
+
 	return map[string]interface{}{
 		// Allow all deprecated features to be enabled by Envoy. This prevents warnings or hard errors when
 		// it is sent config that is being deprecated.
@@ -167,6 +172,13 @@ func getRuntimeConfigLayer0() (map[string]interface{}, error) {
 		// in request path logged in traces and access logs. So in case user wants to keep the original behavior because
 		// CVE is not applicable in their case then they can set Envoy env variable ENVOY_SANITIZE_ORIGINAL_PATH to `false`.
 		"envoy.reloadable_features.sanitize_original_path": setSanitizeOriginalPath,
+
+		// Default is set to false.
+		// Envoy made a change to outlier detection with active healthchecks enabled. If active HC is enabled and a host
+		// is ejected by outlier detection, a successful active health check unejects the host and consider it healthy.
+		// This also clears all the outlier detection counters. To enable the new behavior, set Envoy env variable
+		// ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST to `true`.
+		"envoy.reloadable_features.successful_active_health_check_uneject_host": setActiveHealthCheckUnejectHost,
 	}, nil
 }
 
