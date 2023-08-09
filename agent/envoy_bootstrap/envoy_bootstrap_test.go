@@ -287,6 +287,12 @@ func TestGetGovCloudRegionalXdsEndpoint_BoringSSL(t *testing.T) {
 	assertError(t, v, err)
 }
 
+func TestGetIsoCloudRegionalXdsEndpoint_BoringSSL(t *testing.T) {
+	setup()
+	v, err := getRegionalXdsEndpoint("us-iso-west-1", newMockEnvoyCLI("BoringSSL", nil))
+	assertError(t, v, err)
+}
+
 func TestGetRegionalXdsEndpoint_Fips_Dualstack(t *testing.T) {
 	setup()
 	os.Setenv("APPMESH_DUALSTACK_ENDPOINT", "1")
@@ -2862,7 +2868,8 @@ func TestRelayBootstrap_NullConfigFile(t *testing.T) {
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
-	b, err := GetRelayBootstrapYaml(agentConfig, mockFileUtil)
+	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
+	b, err := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
 	if err != nil {
 		t.Error(err)
 	}
@@ -2880,7 +2887,8 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariables(t *testing.T) {
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
-	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil)
+	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
+	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
 	assert.Nil(t, e)
 
 	_, a_exists := os.LookupEnv("APPNET_RELAY_LISTENER_UDS_PATH")
@@ -2900,4 +2908,106 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariables(t *testing.T) {
 
 	_, f_exists := os.LookupEnv("RELAY_BUFFER_LIMIT_BYTES")
 	assert.True(t, f_exists)
+}
+
+func TestRelayBootstrap_DefaultValuesSetForEnvVariableFips(t *testing.T) {
+	setup()
+	os.Setenv("AWS_REGION", "us-west-2")
+	os.Setenv("APPMESH_RESOURCE_ARN", "mesh/foo/virtualNode/bar")
+	os.Setenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS", "1")
+	defer os.Unsetenv("AWS_REGION")
+	defer os.Unsetenv("APPMESH_RESOURCE_ARN")
+	defer os.Unsetenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS")
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	mockFileUtil := newMockFileUtil([]byte{}, nil)
+	mockEnvoyCLI := newMockEnvoyCLI("AWS-LC-FIPS", nil)
+	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
+	assert.Nil(t, e)
+
+	_, a_exists := os.LookupEnv("APPNET_RELAY_LISTENER_UDS_PATH")
+	assert.True(t, a_exists)
+
+	_, b_exists := os.LookupEnv("AWS_REGION")
+	assert.True(t, b_exists)
+
+	xDS_domain, c_exists := os.LookupEnv("APPNET_MANAGEMENT_DOMAIN_NAME")
+	assert.True(t, c_exists)
+	assert.True(t, strings.Contains(strings.ToLower(xDS_domain), "fips"))
+
+	_, d_exists := os.LookupEnv("APPNET_MANAGEMENT_PORT")
+	assert.True(t, d_exists)
+
+	_, e_exists := os.LookupEnv("RELAY_STREAM_IDLE_TIMEOUT")
+	assert.True(t, e_exists)
+
+	_, f_exists := os.LookupEnv("RELAY_BUFFER_LIMIT_BYTES")
+	assert.True(t, f_exists)
+}
+
+func TestRelayBootstrap_DefaultValuesSetForEnvVariablesInGovCloud(t *testing.T) {
+	setup()
+	os.Setenv("AWS_REGION", "us-gov-west-1")
+	os.Setenv("APPMESH_RESOURCE_ARN", "mesh/foo/virtualNode/bar")
+	os.Setenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS", "1")
+	defer os.Unsetenv("AWS_REGION")
+	defer os.Unsetenv("APPMESH_RESOURCE_ARN")
+	defer os.Unsetenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS")
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	mockFileUtil := newMockFileUtil([]byte{}, nil)
+	mockEnvoyCLI := newMockEnvoyCLI("AWS-LC-FIPS", nil)
+	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
+	assert.Nil(t, e)
+
+	_, a_exists := os.LookupEnv("APPNET_RELAY_LISTENER_UDS_PATH")
+	assert.True(t, a_exists)
+
+	_, b_exists := os.LookupEnv("AWS_REGION")
+	assert.True(t, b_exists)
+
+	xDS_domain, c_exists := os.LookupEnv("APPNET_MANAGEMENT_DOMAIN_NAME")
+	assert.True(t, c_exists)
+	assert.True(t, strings.Contains(strings.ToLower(xDS_domain), "fips"))
+
+	_, d_exists := os.LookupEnv("APPNET_MANAGEMENT_PORT")
+	assert.True(t, d_exists)
+
+	_, e_exists := os.LookupEnv("RELAY_STREAM_IDLE_TIMEOUT")
+	assert.True(t, e_exists)
+
+	_, f_exists := os.LookupEnv("RELAY_BUFFER_LIMIT_BYTES")
+	assert.True(t, f_exists)
+}
+
+func TestRelayBootstrap_NotFipsCompatibleInGovCloud(t *testing.T) {
+	setup()
+	os.Setenv("AWS_REGION", "us-gov-west-1")
+	os.Setenv("APPMESH_RESOURCE_ARN", "mesh/foo/virtualNode/bar")
+	os.Setenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS", "1")
+	defer os.Unsetenv("AWS_REGION")
+	defer os.Unsetenv("APPMESH_RESOURCE_ARN")
+	defer os.Unsetenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS")
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	mockFileUtil := newMockFileUtil([]byte{}, nil)
+	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
+	v, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
+	assertError(t, v, e)
+}
+
+func TestRelayBootstrap_NotFipsCompatibleInIsoCloud(t *testing.T) {
+	setup()
+	os.Setenv("AWS_REGION", "us-isob-east-1")
+	os.Setenv("APPMESH_RESOURCE_ARN", "mesh/foo/virtualNode/bar")
+	os.Setenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS", "1")
+	defer os.Unsetenv("AWS_REGION")
+	defer os.Unsetenv("APPMESH_RESOURCE_ARN")
+	defer os.Unsetenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS")
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	mockFileUtil := newMockFileUtil([]byte{}, nil)
+	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
+	v, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
+	assertError(t, v, e)
 }

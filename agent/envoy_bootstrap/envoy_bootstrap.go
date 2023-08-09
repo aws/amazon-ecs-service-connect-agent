@@ -273,24 +273,19 @@ func getXdsDomain(region string, dualstack bool) string {
 	}
 }
 
-func useXdsEndpointWithFipsSuffix(region string, envoyCLIInst EnvoyCLI) (bool, error) {
+// Check if xDS endpoint should contain `-fips` suffix from Envoy version string.
+func isFipsCompatible(region string, envoyCLIInst EnvoyCLI) (bool, error) {
 	version, err := envoyCLIInst.run("--version")
 	if err != nil {
 		log.Warnf("Could not determine envoy version: %v", err)
 		version = "unknown"
 	}
-	// In GovCloud regions the FIPS xDS endpoint will not contain the suffix `-fips`.
-	if strings.HasPrefix(region, "us-gov-") {
-		// Meanwhile, error if the image in GovCloud is not FIPS compatible.
-		if !strings.Contains(strings.ToLower(version), "fips") {
-			return false, fmt.Errorf("envoy version: %s is not FIPS compatible for region %s", version, region)
-		}
-		return false, nil
-	} else {
-		// For AWS Commercial regions in US & CA the FIPS xDS endpoint will contain the suffix `-fips`.
-		// Note that the FIPS image will fail to connect to xDS endpoint in regions without a FIPS endpoint.
-		return strings.Contains(strings.ToLower(version), "fips"), nil
+	// Error if the image in us-gov-* or us-iso* is not FIPS compatible.
+	if (strings.HasPrefix(region, "us-gov-") || strings.HasPrefix(region, "us-iso")) && !strings.Contains(strings.ToLower(version), "fips") {
+		return false, fmt.Errorf("envoy version: %s is not FIPS compatible for region %s", version, region)
 	}
+	// Note that the FIPS image will fail to connect to xDS endpoint in regions without a FIPS endpoint.
+	return strings.Contains(strings.ToLower(version), "fips"), nil
 }
 
 func getRegionalXdsEndpoint(region string, envoyCLIInst EnvoyCLI) (*string, error) {
@@ -306,14 +301,17 @@ func getRegionalXdsEndpoint(region string, envoyCLIInst EnvoyCLI) (*string, erro
 	if err != nil {
 		return nil, err
 	}
-	// Below call will check if xDS endpoint is to be used with `-fips` suffix.
-	// Also, for US GovCloud region it will verfiy if the image is FIPS compatible.
-	fips, err := useXdsEndpointWithFipsSuffix(region, envoyCLIInst)
-	if err != nil {
+	var useFips bool
+	if fips, err := isFipsCompatible(region, envoyCLIInst); err != nil {
 		return nil, err
+	} else {
+		// TODO: In GovCloud regions the AppMesh FIPS xDS endpoint does not contain the suffix `-fips`.
+		// In future if AppMesh adds endpoints with suffx '-fips' in GovCloud regions then get rid of
+		// this below logic and directly use the variable `fips`.
+		useFips = fips && !strings.HasPrefix(region, "us-gov-")
 	}
 
-	if preview && fips {
+	if preview && useFips {
 		v := fmt.Sprintf("appmesh-preview-envoy-management-fips.%s.%s:443", region, getXdsDomain(region, dualstack))
 		return &v, nil
 	}
@@ -321,7 +319,7 @@ func getRegionalXdsEndpoint(region string, envoyCLIInst EnvoyCLI) (*string, erro
 		v := fmt.Sprintf("appmesh-preview-envoy-management.%s.%s:443", region, getXdsDomain(region, dualstack))
 		return &v, nil
 	}
-	if fips {
+	if useFips {
 		v := fmt.Sprintf("appmesh-envoy-management-fips.%s.%s:443", region, getXdsDomain(region, dualstack))
 		return &v, nil
 	}
@@ -1602,7 +1600,7 @@ func CreateBootstrapYamlFile(agentConfig config.AgentConfig) error {
 
 // Sets default values for environment variables required by relay bootstrap but aren't defined by user.
 // Also exports those variables so they can be expanded in the yaml config file.
-func setRelayBootstrapEnvVariables(agentConfig config.AgentConfig) error {
+func setRelayBootstrapEnvVariables(agentConfig config.AgentConfig, envoyCLIInst EnvoyCLI) error {
 	if _, exists := os.LookupEnv("APPNET_RELAY_LISTENER_UDS_PATH"); !exists {
 		log.Infof("APPNET_RELAY_LISTENER_UDS_PATH is not set, setting default value as: %v", agentConfig.AppNetRelayListenerUdsPath)
 		os.Setenv("APPNET_RELAY_LISTENER_UDS_PATH", agentConfig.AppNetRelayListenerUdsPath)
@@ -1611,7 +1609,7 @@ func setRelayBootstrapEnvVariables(agentConfig config.AgentConfig) error {
 	if _, exists := os.LookupEnv("AWS_REGION"); !exists {
 		region, err := getRegion()
 		if err != nil {
-			return fmt.Errorf("Failed to get region from the environment: %v", err)
+			return fmt.Errorf("failed to get region from the environment: %v", err)
 		}
 		log.Infof("AWS_REGION is not set, setting default value as: %v", region)
 		os.Setenv("AWS_REGION", region)
@@ -1622,9 +1620,17 @@ func setRelayBootstrapEnvVariables(agentConfig config.AgentConfig) error {
 	} else {
 		region, err := getRegion()
 		if err != nil {
-			return fmt.Errorf("Failed to get region from the environment: %v", err)
+			return fmt.Errorf("failed to get region from the environment: %v", err)
 		}
-		endpoint := fmt.Sprintf("ecs-sc.%s.%s", region, getXdsDomain(region, true))
+		var endpoint string
+		if fips, err := isFipsCompatible(region, envoyCLIInst); err != nil {
+			return fmt.Errorf("failed to verify FIPS compatibility: %v", err)
+		} else if fips {
+			endpoint = fmt.Sprintf("ecs-sc-fips.%s.%s", region, getXdsDomain(region, true))
+		} else {
+			endpoint = fmt.Sprintf("ecs-sc.%s.%s", region, getXdsDomain(region, true))
+		}
+
 		log.Infof("APPNET_MANAGEMENT_DOMAIN_NAME is not set, setting default value as: %v", endpoint)
 		os.Setenv("APPNET_MANAGEMENT_DOMAIN_NAME", endpoint)
 	}
@@ -1646,7 +1652,7 @@ func setRelayBootstrapEnvVariables(agentConfig config.AgentConfig) error {
 	return nil
 }
 
-func GetRelayBootstrapYaml(agentConfig config.AgentConfig, fileUtil FileUtil) ([]byte, error) {
+func GetRelayBootstrapYaml(agentConfig config.AgentConfig, fileUtil FileUtil, envoyCLIInst EnvoyCLI) ([]byte, error) {
 	relayBootstrapConfigPath := filepath.Join("agent-resources", "bootstrap_configs", "relay_bootstrap.yaml")
 
 	configYaml, err := fileUtil.Read(relayBootstrapConfigPath)
@@ -1654,7 +1660,7 @@ func GetRelayBootstrapYaml(agentConfig config.AgentConfig, fileUtil FileUtil) ([
 		return nil, fmt.Errorf("Cannot read relay bootstrap config file. %v", err)
 	}
 
-	er := setRelayBootstrapEnvVariables(agentConfig)
+	er := setRelayBootstrapEnvVariables(agentConfig, envoyCLIInst)
 	if er != nil {
 		return nil, fmt.Errorf("Failed to read relay bootstrap environment variables. %v", er)
 	}
@@ -1671,7 +1677,8 @@ func CreateRelayBootstrapYamlFile(agentConfig config.AgentConfig) error {
 	}
 
 	fileUtilInst := &fileUtil{}
-	envoyConfigYaml, err := GetRelayBootstrapYaml(agentConfig, fileUtilInst)
+	envoyCLIInst := &envoyCLI{agentConfig.CommandPath}
+	envoyConfigYaml, err := GetRelayBootstrapYaml(agentConfig, fileUtilInst, envoyCLIInst)
 	if err != nil {
 		return err
 	}
