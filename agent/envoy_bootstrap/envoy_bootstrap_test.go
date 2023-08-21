@@ -673,7 +673,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.tcp_pool_idle_timeout: true
       envoy.reloadable_features.sanitize_original_path: true
       envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
@@ -697,7 +696,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: false
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.tcp_pool_idle_timeout: true
       envoy.reloadable_features.sanitize_original_path: true
       envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
@@ -721,31 +719,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: false
-      envoy.reloadable_features.tcp_pool_idle_timeout: true
-      envoy.reloadable_features.sanitize_original_path: true
-      envoy.reloadable_features.successful_active_health_check_uneject_host: false
-      re2.max_program_size.error_level: 1000
-  - name: "admin_layer"
-    adminLayer: {}
-`)
-}
-
-func TestBuildLayeredRuntime_DisableTcpPoolIdleTimeout(t *testing.T) {
-	setup()
-	os.Setenv("ENVOY_ENABLE_TCP_POOL_IDLE_TIMEOUT", "false")
-	defer os.Unsetenv("ENVOY_ENABLE_TCP_POOL_IDLE_TIMEOUT")
-	rt, err := buildLayeredRuntime()
-	if err != nil {
-		t.Error(err)
-	}
-	checkMessage(t, rt, `
-layers:
-  - name: "static_layer_0"
-    staticLayer:
-      envoy.features.enable_all_deprecated_features: true
-      envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
-      envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.tcp_pool_idle_timeout: false
       envoy.reloadable_features.sanitize_original_path: true
       envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
@@ -769,7 +742,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.tcp_pool_idle_timeout: true
       envoy.reloadable_features.sanitize_original_path: false
       envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
@@ -793,7 +765,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.tcp_pool_idle_timeout: true
       envoy.reloadable_features.sanitize_original_path: true
       envoy.reloadable_features.successful_active_health_check_uneject_host: true
       re2.max_program_size.error_level: 1000
