@@ -69,6 +69,7 @@ var (
 )
 
 const (
+	runtimeMetadataNamespace    = "aws.appmesh.static_runtime"
 	staticResourcesKey          = "staticResources"
 	tracingKey                  = "tracing"
 	statsConfigKey              = "statsConfig"
@@ -1387,6 +1388,12 @@ func convertToYAML(b *boot.Bootstrap, fileUtil FileUtil) (string, error) {
 
 func buildMetadataForNode() (*structpb.Struct, error) {
 	metadata := make(map[string]interface{})
+
+	if runtimeConfig, err := getRuntimeConfigLayer0(); err != nil {
+		log.Warnf("Could not collect static runtime info: %s", err)
+	} else {
+		metadata[runtimeMetadataNamespace] = runtimeConfig
+	}
 
 	interfaceInfo, err := netinfo.BuildMapWithInterfaceInfo()
 	if err != nil {
