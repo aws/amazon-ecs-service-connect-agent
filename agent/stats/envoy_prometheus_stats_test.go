@@ -136,7 +136,7 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Failure_Envoy_Internal_Error(t 
 	defer res.Body.Close()
 }
 
-func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Usedonly_FilterAppMesh(t *testing.T) {
+func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Usedonly(t *testing.T) {
 	// Mock an Envoy server since we are not spawning an Envoy for this unit test
 	sampleStatsOutput := "usedonly param enabled."
 	envoy := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
