@@ -276,7 +276,10 @@ func validateGetStatsRequest(request *http.Request) (*url.Values, error) {
 
 // constructQueryString constructs the query string for Envoy Admin Stats API.
 func constructQueryString(queryParameters url.Values) string {
-	queryStringToEnvoy := fmt.Sprintf("%s&%s", config.ENVOY_PROMETHEUS_QUERY_STRING, config.APPMESH_FILTER_STRING)
+	queryStringToEnvoy := config.ENVOY_PROMETHEUS_QUERY_STRING
+	if queryParameters.Has(filterQueryKey) {
+		queryStringToEnvoy += fmt.Sprintf("&%s", config.APPMESH_FILTER_STRING)
+	}
 	if queryParameters.Has(usedOnlyQueryKey) {
 		queryStringToEnvoy += fmt.Sprintf("&%s", usedOnlyQueryKey)
 	}

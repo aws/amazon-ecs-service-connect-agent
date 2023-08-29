@@ -138,10 +138,10 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Failure_Envoy_Internal_Error(t 
 
 func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Usedonly_FilterAppMesh(t *testing.T) {
 	// Mock an Envoy server since we are not spawning an Envoy for this unit test
-	sampleStatsOutput := "usedonly param and appmesh filter enabled."
+	sampleStatsOutput := "usedonly param enabled."
 	envoy := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		queryParameters, _ := url.ParseQuery(request.URL.RawQuery)
-		if queryParameters.Has(usedOnlyQueryKey) && queryParameters.Get("filter") == "appmesh" {
+		if queryParameters.Has(usedOnlyQueryKey) {
 			io.WriteString(writer, sampleStatsOutput)
 		}
 	}))
@@ -225,7 +225,10 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Metrics_
 		"# TYPE envoy_cluster_default_total_match_count counter\n" +
 		"envoy_cluster_default_total_match_count{Mesh=\"howto-k8s-http2\",VirtualNode=\"client_howto-k8s-http2\",envoy_cluster_name=\"cds_egress_howto-k8s-http2_amazonaws\"} 0\n"
 	envoy := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		io.WriteString(writer, sampleStatsOutput)
+		queryParameters, _ := url.ParseQuery(request.URL.RawQuery)
+		if queryParameters.Get("filter") == "appmesh" {
+			io.WriteString(writer, sampleStatsOutput)
+		}
 	}))
 
 	// Setup an http server that serves stats request
@@ -243,7 +246,7 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Metrics_
 	filterParam := fmt.Sprintf("%s=%s", filterQueryKey, QuerySet[filterQueryKey])
 	requestUrl := fmt.Sprintf("%s?%s", statsServer.URL, filterParam)
 	res, err := http.Get(requestUrl)
-
+	assert.NoError(t, err)
 	assert.NotNil(t, res)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
