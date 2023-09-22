@@ -46,6 +46,7 @@ func (snapshotter *Snapshotter) StartSnapshot(agentConfig config.AgentConfig) {
 	snapshotter.HttpClient = httpClient
 	queryParams := url.Values{}
 	queryParams.Add(usedOnlyQueryKey, "")
+	queryParams.Add(filterQueryKey, QuerySet[filterQueryKey].(string))
 	queryString := constructQueryString(queryParams)
 	requestUrl := getEnvoyStatsUrl(&agentConfig, queryString)
 	statsRequest, err := client.CreateRetryableAgentRequest(http.MethodGet, requestUrl, nil)
