@@ -59,6 +59,7 @@ type HealthStatus struct {
 	ManagementServerDisconnectedTimestamp *time.Time `json:"managementServerDisconnectedTimestamp,omitempty"`
 	EnvoyReadinessState                   string     `json:"envoyReadinessState"`
 	InitialConfigUpdateStatus             string     `json:"initialConfigUpdateStatus,omitempty"`
+	HealthStatusFlipCount                 int        `json:"HealthStatusFlipCount,omitempty"`
 }
 
 type HealthStatusHandler struct {
@@ -196,8 +197,10 @@ func (healthStatus *HealthStatus) computeHealthCheck(agentConfig config.AgentCon
 	// it is reported as Unhealthy.
 	// Disconnection from Control plane (Applicable only when not using Relay Mode):
 	// - Even when initialized, Envoy is statically stable and hence continue to report healthy.
-	// - To prevent Envoy from getting stuck in a disconnected state, we define a configurable threshold crossing which
-	//   it starts reporting unhealthy.
+	// - The healthStatusFlipCount is utilized to monitor the connection status with the management server.
+	//   If the management server is disconnected, the healthStatusFlipCount increments.
+	// - The health flip logic aims to quickly detect and mitigate disruptions from relay agents by marking the task as unhealthy earlier.
+	// - When this count reaches a predefined threshold of 5, it is reported as Unhealthy.
 	switch healthStatus.EnvoyState {
 	case LIVE:
 		if healthStatus.InitialConfigUpdateStatus == UPDATE_FAILED {
@@ -209,12 +212,14 @@ func (healthStatus *HealthStatus) computeHealthCheck(agentConfig config.AgentCon
 			break
 		}
 		if healthStatus.ManagementServerConnectionStatus == connected {
+			healthStatus.HealthStatusFlipCount = 0
 			healthStatus.HealthStatus = Healthy
 		} else {
-			if time.Since(*healthStatus.ManagementServerDisconnectedTimestamp) < agentConfig.HcDisconnectedTimeout {
-				healthStatus.HealthStatus = Healthy
-			} else {
+			healthStatus.HealthStatusFlipCount++
+			if healthStatus.HealthStatusFlipCount >= 5 {
 				healthStatus.HealthStatus = Unhealthy
+			} else {
+				healthStatus.HealthStatus = Healthy
 			}
 		}
 	default:
