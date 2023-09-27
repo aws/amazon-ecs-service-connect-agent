@@ -60,6 +60,8 @@ type HealthStatus struct {
 	EnvoyReadinessState                   string     `json:"envoyReadinessState"`
 	InitialConfigUpdateStatus             string     `json:"initialConfigUpdateStatus,omitempty"`
 	HealthStatusFlipCount                 int        `json:"HealthStatusFlipCount,omitempty"`
+    LastConnectionStatus                  string     `json:"lastConnectionStatus,omitempty"` //Represents the last ManagementServerConnectionStatus
+    FlipTimestamps                     []time.Time   `json:"FlipTimestamps,omitempty"` //Denotes the times when the connection status has flipped
 }
 
 type HealthStatusHandler struct {
@@ -197,10 +199,19 @@ func (healthStatus *HealthStatus) computeHealthCheck(agentConfig config.AgentCon
 	// it is reported as Unhealthy.
 	// Disconnection from Control plane (Applicable only when not using Relay Mode):
 	// - Even when initialized, Envoy is statically stable and hence continue to report healthy.
-	// - The healthStatusFlipCount is utilized to monitor the connection status with the management server.
-	//   If the management server is disconnected, the healthStatusFlipCount increments.
-	// - The health flip logic aims to quickly detect and mitigate disruptions from relay agents by marking the task as unhealthy earlier.
-	// - When this count reaches a predefined threshold of 5, it is reported as Unhealthy.
+    // - If the connection status is CONNECTED, Envoy is reported as Healthy, and FlipTimestamps is reset.
+    // - If the connection status is NOT CONNECTED and has changed since the last check,
+    //   the current time is appended to FlipTimestamps, provided that the timestamp is within the last 30 minutes.
+    // - If the length of FlipTimestamps reaches or exceeds a predefined threshold of 10, Envoy is reported as Unhealthy.
+    //   Otherwise, it is reported as Healthy.
+
+    currentTime := time.Now()
+
+    // If LastConnectionStatus is empty, initialize it with the value of ManagementServerConnectionStatus.
+    if healthStatus.LastConnectionStatus == "" {
+        healthStatus.LastConnectionStatus = healthStatus.ManagementServerConnectionStatus
+    }
+
 	switch healthStatus.EnvoyState {
 	case LIVE:
 		if healthStatus.InitialConfigUpdateStatus == UPDATE_FAILED {
@@ -211,17 +222,37 @@ func (healthStatus *HealthStatus) computeHealthCheck(agentConfig config.AgentCon
 			healthStatus.HealthStatus = Healthy
 			break
 		}
-		if healthStatus.ManagementServerConnectionStatus == connected {
-			healthStatus.HealthStatusFlipCount = 0
-			healthStatus.HealthStatus = Healthy
-		} else {
-			healthStatus.HealthStatusFlipCount++
-			if healthStatus.HealthStatusFlipCount >= 5 {
-				healthStatus.HealthStatus = Unhealthy
-			} else {
-				healthStatus.HealthStatus = Healthy
-			}
-		}
+
+    // If ManagementServerConnectionStatus has changed since the last update, add the current time to FlipTimestamps.
+        if healthStatus.ManagementServerConnectionStatus != healthStatus.LastConnectionStatus {
+            healthStatus.FlipTimestamps = append(healthStatus.FlipTimestamps, currentTime)
+
+            // Remove timestamps older than 30 minutes from FlipTimestamps.
+            thirtyMinutesAgo := currentTime.Add(-30 * time.Minute)
+            count := 0
+            for i, timestamp := range healthStatus.FlipTimestamps {
+                if timestamp.After(thirtyMinutesAgo) {
+                    break
+                }
+                count = i + 1
+            }
+            healthStatus.FlipTimestamps = healthStatus.FlipTimestamps[count:]
+
+            // Update LastConnectionStatus with the current ManagementServerConnectionStatus.
+            healthStatus.LastConnectionStatus = healthStatus.ManagementServerConnectionStatus
+        }
+
+        if healthStatus.ManagementServerConnectionStatus == connected {
+            healthStatus.HealthStatus = Healthy
+            healthStatus.FlipTimestamps = nil // clear the timestamps as the connection is now stable
+        } else {
+            if len(healthStatus.FlipTimestamps) >= 10 {
+                healthStatus.HealthStatus = Unhealthy
+            } else {
+                healthStatus.HealthStatus = Healthy
+            }
+        }
+
 	default:
 		healthStatus.HealthStatus = Unhealthy
 	}

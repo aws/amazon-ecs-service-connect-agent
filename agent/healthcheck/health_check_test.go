@@ -147,10 +147,9 @@ func TestHealthUpdater(t *testing.T) {
 
 func TestComputeHealthCheck_EnvoyLive_Healthy(t *testing.T) {
 	healthStatus := HealthStatus{
-		HealthStatus:                     "",
-		EnvoyState:                       "LIVE",
-		ManagementServerConnectionStatus: "CONNECTED",
-		HealthStatusFlipCount:            0,
+		HealthStatus:                          "",
+		EnvoyState:                            "LIVE",
+		ManagementServerConnectionStatus:      "CONNECTED",
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
@@ -162,10 +161,9 @@ func TestComputeHealthCheck_EnvoyLive_Healthy(t *testing.T) {
 
 func TestComputeHealthCheck_EnvoyUnreachable_UnHealthy(t *testing.T) {
 	healthStatus := HealthStatus{
-		HealthStatus:                     "",
-		EnvoyState:                       "UNREACHABLE",
-		ManagementServerConnectionStatus: "CONNECTED",
-		HealthStatusFlipCount:            0,
+		HealthStatus:                          "",
+		EnvoyState:                            "UNREACHABLE",
+		ManagementServerConnectionStatus:      "CONNECTED",
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
@@ -177,10 +175,9 @@ func TestComputeHealthCheck_EnvoyUnreachable_UnHealthy(t *testing.T) {
 
 func TestComputeHealthCheck_EnvoyUnInitialized_UnHealthy(t *testing.T) {
 	healthStatus := HealthStatus{
-		HealthStatus:                     "",
-		EnvoyState:                       "INITIALIZING",
-		ManagementServerConnectionStatus: "CONNECTED",
-		HealthStatusFlipCount:            0,
+		HealthStatus:                          "",
+		EnvoyState:                            "INITIALIZING",
+		ManagementServerConnectionStatus:      "CONNECTED",
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
@@ -192,10 +189,9 @@ func TestComputeHealthCheck_EnvoyUnInitialized_UnHealthy(t *testing.T) {
 
 func TestComputeHealthCheck_EnvoyDisconnected_Healthy(t *testing.T) {
 	healthStatus := HealthStatus{
-		HealthStatus:                     "",
-		EnvoyState:                       "LIVE",
-		ManagementServerConnectionStatus: "NOT_CONNECTED",
-		HealthStatusFlipCount:            0,
+		HealthStatus:                          "",
+		EnvoyState:                            "LIVE",
+		ManagementServerConnectionStatus:      "NOT_CONNECTED",
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
@@ -208,11 +204,14 @@ func TestComputeHealthCheck_EnvoyDisconnected_Healthy(t *testing.T) {
 func TestComputeHealthCheck_EnvoyDisconnected_UnHealthy(t *testing.T) {
 	os.Setenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS", "0")
 	defer os.Unsetenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS")
+
+    flipTimestamps := generateTimestamps(0, 10) // Generate 10 timestamps starting from the current time
+
 	healthStatus := HealthStatus{
-		HealthStatus:                     "",
-		EnvoyState:                       "LIVE",
-		ManagementServerConnectionStatus: "NOT_CONNECTED",
-		HealthStatusFlipCount:            5,
+		HealthStatus:                          "",
+		EnvoyState:                            "LIVE",
+		ManagementServerConnectionStatus:      "NOT_CONNECTED",
+		FlipTimestamps:                        flipTimestamps,
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
@@ -226,10 +225,9 @@ func TestComputeHealthCheck_EnvoyDisconnected_RelayMode_Healthy(t *testing.T) {
 	os.Setenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS", "1")
 	defer os.Unsetenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS")
 	healthStatus := HealthStatus{
-		HealthStatus:                     "",
-		EnvoyState:                       "LIVE",
-		ManagementServerConnectionStatus: "NOT_CONNECTED",
-		HealthStatusFlipCount:            0,
+		HealthStatus:                          "",
+		EnvoyState:                            "LIVE",
+		ManagementServerConnectionStatus:      "NOT_CONNECTED",
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
@@ -241,11 +239,10 @@ func TestComputeHealthCheck_EnvoyDisconnected_RelayMode_Healthy(t *testing.T) {
 
 func TestComputeHealthCheck_InitialConfigUpdateFailed(t *testing.T) {
 	healthStatus := HealthStatus{
-		HealthStatus:                     "",
-		EnvoyState:                       "LIVE",
-		ManagementServerConnectionStatus: "CONNECTED",
-		InitialConfigUpdateStatus:        "UPDATE_FAILED",
-		HealthStatusFlipCount:            0,
+		HealthStatus:                          "",
+		EnvoyState:                            "LIVE",
+		ManagementServerConnectionStatus:      "CONNECTED",
+		InitialConfigUpdateStatus:             "UPDATE_FAILED",
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
@@ -257,11 +254,10 @@ func TestComputeHealthCheck_InitialConfigUpdateFailed(t *testing.T) {
 
 func TestComputeHealthCheck_InitialConfigUpdateSuccessful(t *testing.T) {
 	healthStatus := HealthStatus{
-		HealthStatus:                     "",
-		EnvoyState:                       "LIVE",
-		ManagementServerConnectionStatus: "CONNECTED",
-		InitialConfigUpdateStatus:        "UPDATE_SUCCESSFUL",
-		HealthStatusFlipCount:            0,
+		HealthStatus:                          "",
+		EnvoyState:                            "LIVE",
+		ManagementServerConnectionStatus:      "CONNECTED",
+		InitialConfigUpdateStatus:             "UPDATE_SUCCESSFUL",
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
@@ -359,34 +355,53 @@ func TestComputeManagementServerConnectionStatus_EnvoyConnected(t *testing.T) {
 	assert.True(t, healthStatus.ManagementServerDisconnectedTimestamp == nil)
 }
 
-func TestComputeHealthCheck_HealthStatusHealthyBelowThreshold(t *testing.T) {
-	healthStatus := HealthStatus{
-		HealthStatus:                     "",
-		EnvoyState:                       "LIVE",
-		ManagementServerConnectionStatus: "CONNECTED",
-		HealthStatusFlipCount:            4, // Below the threshold
-	}
-
-	var agentConfig config.AgentConfig
-	agentConfig.SetDefaults()
-
-	healthStatus.computeHealthCheck(agentConfig)
-
-	assert.Equal(t, "HEALTHY", healthStatus.HealthStatus)
+// generateTimestamps creates a slice of timestamps. It starts from "startMinute" minutes ago
+// and generates a total of "count" timestamps.
+func generateTimestamps(startMinute, count int) []time.Time {
+    var flipTimestamps []time.Time
+    currentTime := time.Now()
+    for i := 0; i < count; i++ {
+        flipTimestamps = append(flipTimestamps, currentTime.Add(time.Duration(-startMinute-i)*time.Minute))
+    }
+    return flipTimestamps
 }
 
-func TestComputeHealthCheck_HealthStatusUnhealthyAboveThreshold(t *testing.T) {
-	healthStatus := HealthStatus{
-		HealthStatus:                     "",
-		EnvoyState:                       "LIVE",
-		ManagementServerConnectionStatus: "DISCONNECTED",
-		HealthStatusFlipCount:            5, // At the threshold
-	}
+func TestComputeHealthCheck_BelowThreshold(t *testing.T) {
+    flipTimestamps := generateTimestamps(29, 9) // 9 timestamps, starting from 29 minutes ago
 
-	var agentConfig config.AgentConfig
-	agentConfig.SetDefaults()
+    healthStatus := HealthStatus{
+        EnvoyState: "LIVE",
+        HealthStatus: "HEALTHY",
+        ManagementServerConnectionStatus: "NOT_CONNECTED",
+        LastConnectionStatus: "NOT_CONNECTED",
+        FlipTimestamps: flipTimestamps,
+    }
 
-	healthStatus.computeHealthCheck(agentConfig)
+    var agentConfig config.AgentConfig
+    agentConfig.SetDefaults()
 
-	assert.Equal(t, "UNHEALTHY", healthStatus.HealthStatus)
+    healthStatus.computeHealthCheck(agentConfig)
+
+    assert.Equal(t, 9, len(healthStatus.FlipTimestamps))
+    assert.Equal(t, "HEALTHY", healthStatus.HealthStatus)
+}
+
+func TestComputeHealthCheck_AboveThreshold(t *testing.T) {
+    flipTimestamps := generateTimestamps(29, 10) // 10 timestamps, starting from 29 minutes ago
+
+    healthStatus := HealthStatus{
+        EnvoyState: "LIVE",
+        HealthStatus: "HEALTHY",
+        ManagementServerConnectionStatus: "NOT_CONNECTED",
+        LastConnectionStatus: "NOT_CONNECTED",
+        FlipTimestamps: flipTimestamps,
+    }
+
+    var agentConfig config.AgentConfig
+    agentConfig.SetDefaults()
+
+    healthStatus.computeHealthCheck(agentConfig)
+
+    assert.Equal(t, 10, len(healthStatus.FlipTimestamps))
+    assert.Equal(t, "UNHEALTHY", healthStatus.HealthStatus)
 }
