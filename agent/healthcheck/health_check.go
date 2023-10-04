@@ -50,18 +50,17 @@ const (
 )
 
 type HealthStatus struct {
-	HealthStatus                          string     `json:"healthStatus"`
-	AgentUptime                           string     `json:"agentUptime"`
-	EnvoyPid                              string     `json:"envoyPid"`
-	EnvoyState                            string     `json:"envoyState"`
-	EnvoyRestartCount                     string     `json:"envoyRestartCount"`
-	ManagementServerConnectionStatus      string     `json:"managementServerConnectionStatus,omitempty"`
-	ManagementServerDisconnectedTimestamp *time.Time `json:"managementServerDisconnectedTimestamp,omitempty"`
-	EnvoyReadinessState                   string     `json:"envoyReadinessState"`
-	InitialConfigUpdateStatus             string     `json:"initialConfigUpdateStatus,omitempty"`
-	HealthStatusFlipCount                 int        `json:"HealthStatusFlipCount,omitempty"`
-    LastConnectionStatus                  string     `json:"lastConnectionStatus,omitempty"` //Represents the last ManagementServerConnectionStatus
-    FlipTimestamps                     []time.Time   `json:"FlipTimestamps,omitempty"` //Denotes the times when the connection status has flipped
+	HealthStatus                          string      `json:"healthStatus"`
+	AgentUptime                           string      `json:"agentUptime"`
+	EnvoyPid                              string      `json:"envoyPid"`
+	EnvoyState                            string      `json:"envoyState"`
+	EnvoyRestartCount                     string      `json:"envoyRestartCount"`
+	ManagementServerConnectionStatus      string      `json:"managementServerConnectionStatus,omitempty"`
+	ManagementServerDisconnectedTimestamp *time.Time  `json:"managementServerDisconnectedTimestamp,omitempty"`
+	EnvoyReadinessState                   string      `json:"envoyReadinessState"`
+	InitialConfigUpdateStatus             string      `json:"initialConfigUpdateStatus,omitempty"`
+	LastConnectionStatus                  string      `json:"lastConnectionStatus,omitempty"` //Represents the last ManagementServerConnectionStatus
+	FlipTimestamps                        []time.Time `json:"FlipTimestamps,omitempty"`       //Denotes the times when the connection status has flipped
 }
 
 type HealthStatusHandler struct {
@@ -242,16 +241,11 @@ func (healthStatus *HealthStatus) computeHealthCheck(agentConfig config.AgentCon
             healthStatus.LastConnectionStatus = healthStatus.ManagementServerConnectionStatus
         }
 
-        if healthStatus.ManagementServerConnectionStatus == connected {
-            healthStatus.HealthStatus = Healthy
-            healthStatus.FlipTimestamps = nil // clear the timestamps as the connection is now stable
-        } else {
-            if len(healthStatus.FlipTimestamps) >= 10 {
-                healthStatus.HealthStatus = Unhealthy
-            } else {
-                healthStatus.HealthStatus = Healthy
-            }
-        }
+		if len(healthStatus.FlipTimestamps) >= 10 {
+			healthStatus.HealthStatus = Unhealthy
+		} else {
+			healthStatus.HealthStatus = Healthy
+		}
 
 	default:
 		healthStatus.HealthStatus = Unhealthy
