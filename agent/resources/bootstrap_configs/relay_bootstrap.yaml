@@ -65,6 +65,11 @@ static_resources:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
           explicit_http_config:
             http2_protocol_options: {}
+      upstream_connection_options:
+        # Send TCP keep alive in case upstream closing the connection
+        # https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/core/v3/address.proto#envoy-v3-api-msg-config-core-v3-tcpkeepalive
+        tcp_keepalive:
+          keepalive_time: 200 # The number of seconds a connection needs to be idle before keep-alive probes start being sent.
       lb_policy: round_robin
       per_connection_buffer_limit_bytes: $RELAY_BUFFER_LIMIT_BYTES
       load_assignment:
