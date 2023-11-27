@@ -61,6 +61,54 @@ func TestBuildCommandArgs(t *testing.T) {
 	}, arguments)
 }
 
+func TestBuildCommandArgs_ConcurrencySet(t *testing.T) {
+	var agentConfig config.AgentConfig
+	os.Setenv("ENVOY_CONCURRENCY", "2")
+	defer os.Unsetenv("ENVOY_CONCURRENCY")
+
+	agentConfig.SetDefaults()
+
+	arguments := buildCommandArgs(agentConfig)
+
+	assert.Equal(t, len(arguments), 9)
+	assert.ElementsMatch(t, []string{
+		agentConfig.CommandPath,
+		"-c",
+		agentConfig.EnvoyConfigPath,
+		"-l",
+		agentConfig.EnvoyLogLevel,
+		"--concurrency",
+		"2",
+		"--drain-time-s",
+		strconv.Itoa(int(agentConfig.ListenerDrainWaitTime / time.Second)),
+	}, arguments)
+}
+
+func TestBuildCommandArgsForRelay(t *testing.T) {
+	var agentConfig config.AgentConfig
+	os.Setenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS", "true")
+	defer os.Unsetenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS")
+
+	agentConfig.SetDefaults()
+
+	arguments := buildCommandArgs(agentConfig)
+
+	assert.Equal(t, len(arguments), 11)
+	assert.ElementsMatch(t, []string{
+		agentConfig.CommandPath,
+		"-c",
+		agentConfig.EnvoyConfigPath,
+		"-l",
+		agentConfig.EnvoyLogLevel,
+		"--concurrency",
+		"1",
+		"--component-log-level",
+		"aws:debug",
+		"--drain-time-s",
+		strconv.Itoa(int(agentConfig.ListenerDrainWaitTime / time.Second)),
+	}, arguments)
+}
+
 func TestBuildCommandArgsNoEnvoyParameters(t *testing.T) {
 	var agentConfig config.AgentConfig
 

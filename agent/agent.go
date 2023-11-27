@@ -65,6 +65,13 @@ func buildCommandArgs(agentConfig config.AgentConfig) []string {
 	} else if agentConfig.EnableRelayModeForXds {
 		args = append(args, "--concurrency")
 		args = append(args, config.ENVOY_CONCURRENCY_FOR_RELAY_DEFAULT)
+
+		// If --log-level is not debug and not trace then set `aws` --component-log-level to debug.
+		// https://www.envoyproxy.io/docs/envoy/latest/operations/cli.html#cmdoption-component-log-level
+		if agentConfig.EnvoyLogLevel != "debug" && agentConfig.EnvoyLogLevel != "trace" {
+			args = append(args, "--component-log-level")
+			args = append(args, "aws:debug")
+		}
 	}
 
 	listenerDrainWaitTime := int(agentConfig.ListenerDrainWaitTime / time.Second)
