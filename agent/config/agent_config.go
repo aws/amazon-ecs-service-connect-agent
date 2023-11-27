@@ -61,6 +61,7 @@ const (
 	ENVOY_STATS_ENDPOINT_URL             = "/stats"
 	ENVOY_LOGGING_ENDPOINT_URL           = "/logging"
 	ENVOY_PROMETHEUS_QUERY_STRING        = "?format=prometheus"
+	APPMESH_FILTER_STRING                = "filter=appmesh"
 	ENVOY_LISTENER_DRAINING_ENDPOINT_URL = "/drain_listeners"
 	ENVOY_CONCURRENCY_DEFAULT            = -1  // we will not set concurrency [envoy --concurrency] by default.
 	ENVOY_CONCURRENCY_FOR_RELAY_DEFAULT  = "1" // For relay we are defaulting it to 1

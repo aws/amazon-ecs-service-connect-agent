@@ -660,6 +660,59 @@ metadata:
 `)
 }
 
+func TestBuildNodeMetadata_StaticRuntimeMappingDefault(t *testing.T) {
+	setup()
+	metadata, err := buildMetadataForNode()
+	assert.Nil(t, err)
+	// ignore metadata: aws.appmesh.platformInfo & aws.appmesh.task.interfaces
+	checkMessageSupersetMatch(t, buildNode("id", "cluster", metadata), `
+id: id
+cluster: cluster
+metadata:
+  aws.appmesh.static_runtime:
+    envoy.features.enable_all_deprecated_features: true
+    envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
+    envoy.reloadable_features.no_extension_lookup_by_name: true
+    envoy.reloadable_features.tcp_pool_idle_timeout: true
+    envoy.reloadable_features.sanitize_original_path: true
+    envoy.reloadable_features.successful_active_health_check_uneject_host: false
+    re2.max_program_size.error_level: 1000
+`)
+}
+
+func TestBuildNodeMetadata_StaticRuntimeMappingDefaultOverridden(t *testing.T) {
+	setup()
+	os.Setenv("APPMESH_SET_TRACING_DECISION", "false")
+	defer os.Unsetenv("APPMESH_SET_TRACING_DECISION")
+	os.Setenv("ENVOY_NO_EXTENSION_LOOKUP_BY_NAME", "false")
+	defer os.Unsetenv("ENVOY_NO_EXTENSION_LOOKUP_BY_NAME")
+	os.Setenv("ENVOY_ENABLE_TCP_POOL_IDLE_TIMEOUT", "false")
+	defer os.Unsetenv("ENVOY_ENABLE_TCP_POOL_IDLE_TIMEOUT")
+	os.Setenv("ENVOY_SANITIZE_ORIGINAL_PATH", "false")
+	defer os.Unsetenv("ENVOY_SANITIZE_ORIGINAL_PATH")
+	os.Setenv("ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST", "true")
+	defer os.Unsetenv("ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST")
+	os.Setenv("MAX_REQUESTS_PER_IO_CYCLE", "1")
+	defer os.Unsetenv("MAX_REQUESTS_PER_IO_CYCLE")
+	metadata, err := buildMetadataForNode()
+	assert.Nil(t, err)
+	// ignore metadata: aws.appmesh.platformInfo & aws.appmesh.task.interfaces
+	checkMessageSupersetMatch(t, buildNode("id", "cluster", metadata), `
+id: id
+cluster: cluster
+metadata:
+  aws.appmesh.static_runtime:
+    envoy.features.enable_all_deprecated_features: true
+    envoy.reloadable_features.http_set_tracing_decision_in_request_id: false
+    envoy.reloadable_features.no_extension_lookup_by_name: false
+    envoy.reloadable_features.tcp_pool_idle_timeout: false
+    envoy.reloadable_features.sanitize_original_path: false
+    envoy.reloadable_features.successful_active_health_check_uneject_host: true
+    re2.max_program_size.error_level: 1000
+    http.max_requests_per_io_cycle: 1
+`)
+}
+
 func TestBuildLayeredRuntime(t *testing.T) {
 	setup()
 	rt, err := buildLayeredRuntime()
@@ -767,6 +820,55 @@ layers:
       envoy.reloadable_features.no_extension_lookup_by_name: true
       envoy.reloadable_features.sanitize_original_path: true
       envoy.reloadable_features.successful_active_health_check_uneject_host: true
+      re2.max_program_size.error_level: 1000
+  - name: "admin_layer"
+    adminLayer: {}
+`)
+}
+
+func TestBuildLayeredRuntime_MaxRequestsPerIoCycleSet(t *testing.T) {
+	setup()
+	os.Setenv("MAX_REQUESTS_PER_IO_CYCLE", "1")
+	defer os.Unsetenv("MAX_REQUESTS_PER_IO_CYCLE")
+	rt, err := buildLayeredRuntime()
+	if err != nil {
+		t.Error(err)
+	}
+	checkMessage(t, rt, `
+layers:
+  - name: "static_layer_0"
+    staticLayer:
+      envoy.features.enable_all_deprecated_features: true
+      envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
+      envoy.reloadable_features.no_extension_lookup_by_name: true
+      envoy.reloadable_features.tcp_pool_idle_timeout: true
+      envoy.reloadable_features.sanitize_original_path: true
+      envoy.reloadable_features.successful_active_health_check_uneject_host: false
+      re2.max_program_size.error_level: 1000
+      http.max_requests_per_io_cycle: 1
+  - name: "admin_layer"
+    adminLayer: {}
+`)
+}
+
+func TestBuildLayeredRuntime_MaxRequestsPerIoCycleNegative(t *testing.T) {
+	setup()
+	os.Setenv("MAX_REQUESTS_PER_IO_CYCLE", "-1")
+	defer os.Unsetenv("MAX_REQUESTS_PER_IO_CYCLE")
+	rt, err := buildLayeredRuntime()
+	if err != nil {
+		t.Error(err)
+	}
+	checkMessage(t, rt, `
+layers:
+  - name: "static_layer_0"
+    staticLayer:
+      envoy.features.enable_all_deprecated_features: true
+      envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
+      envoy.reloadable_features.no_extension_lookup_by_name: true
+      envoy.reloadable_features.tcp_pool_idle_timeout: true
+      envoy.reloadable_features.sanitize_original_path: true
+      envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}

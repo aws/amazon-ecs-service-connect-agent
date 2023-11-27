@@ -69,6 +69,7 @@ var (
 )
 
 const (
+	runtimeMetadataNamespace    = "aws.appmesh.static_runtime"
 	staticResourcesKey          = "staticResources"
 	tracingKey                  = "tracing"
 	statsConfigKey              = "statsConfig"
@@ -132,7 +133,8 @@ func getRuntimeConfigLayer0() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	return map[string]interface{}{
+	// ====== Runtime config with defaults set ======
+	result := map[string]interface{}{
 		// Allow all deprecated features to be enabled by Envoy. This prevents warnings or hard errors when
 		// it is sent config that is being deprecated.
 		"envoy.features.enable_all_deprecated_features": true,
@@ -166,7 +168,22 @@ func getRuntimeConfigLayer0() (map[string]interface{}, error) {
 		// This also clears all the outlier detection counters. To enable the new behavior, set Envoy env variable
 		// ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST to `true`.
 		"envoy.reloadable_features.successful_active_health_check_uneject_host": setActiveHealthCheckUnejectHost,
-	}, nil
+	}
+
+	// ====== Runtime config with no defaults set ======
+	// Not set by Default
+	// http: Add runtime flag http.max_requests_per_io_cycle for setting the limit on the number of HTTP requests processed
+	// from a single connection in a single I/O cycle. Requests over this limit are processed in subsequent I/O cycles.
+	// This mitigates CPU starvation by connections that simultaneously send high number of requests by allowing requests
+	// from other connections to make progress. This runtime value can be set to 1 in the presence of abusive HTTP/2 or HTTP/3
+	// connections. By default this limit is disabled.
+	if maxRequestsPerIoCycle, err := env.OrInt("MAX_REQUESTS_PER_IO_CYCLE", -1); err != nil {
+		return nil, err
+	} else if maxRequestsPerIoCycle > 0 {
+		result["http.max_requests_per_io_cycle"] = maxRequestsPerIoCycle
+	}
+
+	return result, nil
 }
 
 func getMeshResourceFromNodeId(nodeId string) (*mesh_resource.MeshResource, error) {
@@ -1374,6 +1391,12 @@ func convertToYAML(b *boot.Bootstrap, fileUtil FileUtil) (string, error) {
 
 func buildMetadataForNode() (*structpb.Struct, error) {
 	metadata := make(map[string]interface{})
+
+	if runtimeConfig, err := getRuntimeConfigLayer0(); err != nil {
+		log.Warnf("Could not collect static runtime info: %s", err)
+	} else {
+		metadata[runtimeMetadataNamespace] = runtimeConfig
+	}
 
 	interfaceInfo, err := netinfo.BuildMapWithInterfaceInfo()
 	if err != nil {
