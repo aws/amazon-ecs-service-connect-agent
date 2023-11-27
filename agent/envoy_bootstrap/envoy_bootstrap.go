@@ -123,11 +123,6 @@ func getRuntimeConfigLayer0() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	setTcpPoolIdleTimeout, err := env.TruthyOrElse("ENVOY_ENABLE_TCP_POOL_IDLE_TIMEOUT", true)
-	if err != nil {
-		return nil, err
-	}
-
 	setSanitizeOriginalPath, err := env.TruthyOrElse("ENVOY_SANITIZE_ORIGINAL_PATH", true)
 	if err != nil {
 		return nil, err
@@ -156,14 +151,6 @@ func getRuntimeConfigLayer0() (map[string]interface{}, error) {
 		// If set to false Envoy will still lookup extension by name.
 		// Refer to https://www.envoyproxy.io/docs/envoy/latest/version_history/v1.22.0#minor-behavior-changes
 		"envoy.reloadable_features.no_extension_lookup_by_name": setNoExtensionLookupByName,
-
-		// Default is set to true.
-		// Envoy introduced a new config `idle_timeout` under upstream TcpProtocolOptions. If this config is not set,
-		// the default idle timeout is 10 minutes. Until we let customers configure this `idle_timeout` option, in case
-		// 10 minutes idle timeout is not enough for customer's use case then we can use this variable to disable the
-		// idle timeout feature for TCP upstream.
-		// See https://www.envoyproxy.io/docs/envoy/v1.25.0/version_history/v1.25/v1.25.0#minor-behavior-changes
-		"envoy.reloadable_features.tcp_pool_idle_timeout": setTcpPoolIdleTimeout,
 
 		// Default is set to true.
 		// Envoy fixed a bug where `x-envoy-original-path` was not being sanitized when sent from untrusted users.
