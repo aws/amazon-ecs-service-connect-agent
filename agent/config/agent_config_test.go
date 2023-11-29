@@ -39,6 +39,7 @@ func TestPopulateDefaultAgentConfig(t *testing.T) {
 	assert.Equal(t, HC_POLL_INTERVAL_MS_DEFAULT*time.Millisecond, agentConfig.HcPollInterval)
 	assert.Equal(t, LISTENER_DRAIN_WAIT_TIME_SEC_DEFAULT*time.Second, agentConfig.ListenerDrainWaitTime)
 	assert.Equal(t, (LISTENER_DRAIN_WAIT_TIME_SEC_DEFAULT+PID_STOP_DELAY_SEC)*time.Second, agentConfig.StopProcessWaitTime)
+	assert.Equal(t, ENABLE_PROFILE_DEFAULT, agentConfig.ProfilingEnabled)
 	assert.Empty(t, agentConfig.EnvoyLoggingDestination)
 	assert.Equal(t, "info", agentConfig.EnvoyLogLevel)
 	assert.NotEmpty(t, agentConfig.EnvoyConfigPath)
@@ -269,4 +270,30 @@ func TestGetHcPollInterval(t *testing.T) {
 	os.Setenv("APPNET_AGENT_POLL_ENVOY_READINESS_INTERVAL_S", "5")
 	agentConfig.SetDefaults()
 	assert.Equal(t, 2001*time.Millisecond, agentConfig.HcPollInterval)
+}
+
+func TestGetDefaultProfilePath(t *testing.T) {
+	os.Setenv("ENABLE_PROFILE", "true")
+	defer os.Unsetenv("ENABLE_PROFILE")
+	var agentConfig AgentConfig
+
+	agentConfig.SetDefaults()
+
+	assert.Equal(t, CPUPROFILE_DEFAULT, agentConfig.CpuProfilePath)
+	assert.Equal(t, HEAPPROFILE_DEFAULT, agentConfig.HeapProfilePath)
+}
+
+func TestGetCustomProfilePath(t *testing.T) {
+	os.Setenv("ENABLE_PROFILE", "true")
+	os.Setenv("CPUPROFILE", "/tmp/mybin.cpuprof")
+	os.Setenv("HEAPPROFILE", "/tmp/mybin.heapprof")
+	defer os.Unsetenv("ENABLE_PROFILE")
+	defer os.Unsetenv("CPUPROFILE")
+	defer os.Unsetenv("HEAPPROFILE")
+	var agentConfig AgentConfig
+
+	agentConfig.SetDefaults()
+
+	assert.Equal(t, "/tmp/mybin.cpuprof", agentConfig.CpuProfilePath)
+	assert.Equal(t, "/tmp/mybin.heapprof", agentConfig.HeapProfilePath)
 }

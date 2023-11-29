@@ -36,9 +36,9 @@ const (
 	k8sVersionEnvVar               = "APPMESH_PLATFORM_K8S_VERSION"
 	podUidEnvVar                   = "APPMESH_PLATFORM_K8S_POD_UID"
 	appMeshControllerVersionEnvVar = "APPMESH_PLATFORM_APP_MESH_CONTROLLER_VERSION"
-	k8sPlatformInfoKey             = "k8sPlatformInfo"
+	K8sPlatformInfoKey             = "k8sPlatformInfo"
 	k8sVersionKey                  = "k8sVersion"
-	podUidKey                      = "podUid"
+	PodUidKey                      = "podUid"
 	appMeshControllerVersionKey    = "appMeshControllerVersion"
 
 	// ECS Info
@@ -46,10 +46,10 @@ const (
 	ecsContainerMetadataUriEnv    = "ECS_CONTAINER_METADATA_URI"
 	ecsContainerMetadataUriV4Env  = "ECS_CONTAINER_METADATA_URI_V4"
 	ecsContainerMetadataTaskPath  = "/task"
-	ecsPlatformInfoKey            = "ecsPlatformInfo"
+	EcsPlatformInfoKey            = "ecsPlatformInfo"
 	ecsLaunchTypeKey              = "ecsLaunchType"
 	ecsClusterArnKey              = "ecsClusterArn"
-	ecsTaskArnKey                 = "ecsTaskArn"
+	EcsTaskArnKey                 = "ecsTaskArn"
 	ecsEnvoyContainerCpuLimit     = "CPU"
 	ecsEnvoyContainerMemoryLimit  = "Memory"
 	ecsContainerInstanceArnEnvVar = "ECS_CONTAINER_INSTANCE_ARN"
@@ -58,14 +58,16 @@ const (
 	// Platform independent information
 	ec2MetadataUriEnvForTesting = "EC2_METADATA_HOST_ONLY_FOR_TESTING"
 	ec2MetadataHost             = "http://169.254.169.254"
-	azQuery                     = "placement/availability-zone"
-	azIDQuery                   = "placement/availability-zone-id"
-	AvailabilityZoneKey         = "AvailabilityZone"
-	AvailabilityZoneIDKey       = "AvailabilityZoneID"
-	supportedIPFamiliesKey      = "supportedIPFamilies"
-	ec2MetadataTokenResource    = "/latest/api/token"
-	ec2ImdsTokenHeader          = "X-aws-ec2-metadata-token"
-	ec2ImdsTokenTtlHeader       = "X-aws-ec2-metadata-token-ttl-seconds"
+	azQuery                     = "/latest/meta-data/placement/availability-zone"
+	azIDQuery                   = "/latest/meta-data/placement/availability-zone-id"
+	DocumentQuery               = "/latest/dynamic/instance-identity/document"
+
+	AvailabilityZoneKey      = "AvailabilityZone"
+	AvailabilityZoneIDKey    = "AvailabilityZoneID"
+	supportedIPFamiliesKey   = "supportedIPFamilies"
+	ec2MetadataTokenResource = "/latest/api/token"
+	ec2ImdsTokenHeader       = "X-aws-ec2-metadata-token"
+	ec2ImdsTokenTtlHeader    = "X-aws-ec2-metadata-token-ttl-seconds"
 
 	// System Information
 	systemInfoKey       = "systemInfo"
@@ -73,38 +75,40 @@ const (
 	sysKernelVersionKey = "systemKernelVersion"
 )
 
-func buildMetadataForK8sPlatform(mapping map[string]interface{}) {
+func BuildMetadataForK8sPlatform(mapping map[string]interface{}) bool {
 	k8sVersion := env.Get(k8sVersionEnvVar)
 	podUid := env.Get(podUidEnvVar)
 	appMeshControllerVersion := env.Get(appMeshControllerVersionEnvVar)
 
 	// TODO: Add EKS cluster info when available
 	if k8sVersion != "" && podUid != "" && appMeshControllerVersion != "" {
-		mapping[k8sPlatformInfoKey] = map[string]interface{}{
+		mapping[K8sPlatformInfoKey] = map[string]interface{}{
 			k8sVersionKey:               k8sVersion,
-			podUidKey:                   podUid,
+			PodUidKey:                   podUid,
 			appMeshControllerVersionKey: appMeshControllerVersion,
 		}
 
 		// Since IMDS is not accessible from inside ECS, making below 2 calls only on EKS platform.
 		// Fetch AZ from EC2 instance metadata if possible.
-		if availabilityZone, err := getEc2InstanceMetadata(azQuery); err != nil {
+		if availabilityZone, err := GetEc2InstanceMetadata(azQuery); err != nil {
 			log.Warnf("Couldn't determine the AZ due to: %v", err)
 		} else if availabilityZone != "" {
 			mapping[AvailabilityZoneKey] = availabilityZone
 		}
 		// Fetch AZ ID info as AZ can map differently for each account but AZ IDs are the same for
 		// every account https://docs.aws.amazon.com/ram/latest/userguide/working-with-az-ids.html
-		if availabilityZoneID, err := getEc2InstanceMetadata(azIDQuery); err != nil {
+		if availabilityZoneID, err := GetEc2InstanceMetadata(azIDQuery); err != nil {
 			// Just log info if we can't get this information
 			log.Warnf("Couldn't determine the AZ ID due to: %v", err)
 		} else if availabilityZoneID != "" {
 			mapping[AvailabilityZoneIDKey] = availabilityZoneID
 		}
+		return true
 	}
+	return false
 }
 
-func buildMetadataForEcsPlatform(mapping map[string]interface{}) {
+func BuildMetadataForEcsPlatform(mapping map[string]interface{}) bool {
 	// ECS platform information
 
 	// Networks info: supportedIPFamilies, it's not an ECS only info, for others we may also need to set this
@@ -139,8 +143,10 @@ func buildMetadataForEcsPlatform(mapping map[string]interface{}) {
 		if supportedIPFamilies != "" {
 			mapping[supportedIPFamiliesKey] = supportedIPFamilies
 		}
-		mapping[ecsPlatformInfoKey] = ecsMetadata
+		mapping[EcsPlatformInfoKey] = ecsMetadata
+		return true
 	}
+	return false
 }
 
 func buildMetadataFromSystemInfo(mapping map[string]interface{}) {
@@ -166,8 +172,8 @@ func BuildMetadata() (*map[string]interface{}, error) {
 	md := make(map[string]interface{})
 	mapping := make(map[string]interface{})
 
-	buildMetadataForK8sPlatform(mapping)
-	buildMetadataForEcsPlatform(mapping)
+	BuildMetadataForK8sPlatform(mapping)
+	BuildMetadataForEcsPlatform(mapping)
 	buildMetadataFromSystemInfo(mapping)
 
 	if len(mapping) != 0 {
@@ -191,7 +197,7 @@ func getEcsContainerMetadata(uri string, ecsMetadata map[string]interface{}) {
 		ecsMetadata[ecsClusterArnKey] = ecsClusterArn
 	}
 	if ecsTaskArn := metadataMap["TaskARN"]; ecsTaskArn != "" {
-		ecsMetadata[ecsTaskArnKey] = ecsTaskArn
+		ecsMetadata[EcsTaskArnKey] = ecsTaskArn
 	}
 	if availabilityZone := metadataMap["AvailabilityZone"]; availabilityZone != "" {
 		ecsMetadata[AvailabilityZoneKey] = availabilityZone
@@ -296,7 +302,7 @@ func getEcsContainerSupportedIPFamilies(uri string) string {
 	return ""
 }
 
-func getEc2InstanceMetadata(query string) (string, error) {
+func GetEc2InstanceMetadata(query string) (string, error) {
 	httpClient := client.CreateDefaultHttpClient()
 	// https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instancedata-data-retrieval.html
 	// EC2 Instance Metadata url to get the token: http://169.254.169.254/latest/api/token
@@ -329,8 +335,8 @@ func getEc2InstanceMetadata(query string) (string, error) {
 			}
 		}
 	}
-	// EC2 Instance Metadata url: http://169.254.169.254/latest/meta-data/
-	requestUrl := env.Or(ec2MetadataUriEnvForTesting, ec2MetadataHost) + "/latest/meta-data/" + query
+	// EC2 Instance Metadata url: http://169.254.169.254
+	requestUrl := env.Or(ec2MetadataUriEnvForTesting, ec2MetadataHost) + query
 	imdsRequest, err := client.CreateStandardAgentHttpRequest(http.MethodGet, requestUrl, nil)
 	if err != nil {
 		return "", fmt.Errorf("unable to create http request: %v. request url: %s", err, requestUrl)

@@ -119,6 +119,11 @@ const (
 	// Rate limiter constants
 	TPS_LIMIT       = 10
 	BURST_TPS_LIMIT = 20
+
+	// CPU & Heap profiling
+	ENABLE_PROFILE_DEFAULT = false
+	CPUPROFILE_DEFAULT     = "/tmp/prof/mybin.cpuprof"
+	HEAPPROFILE_DEFAULT    = "/tmp/prof/mybin.heapprof"
 )
 
 var AdminModeStrToEnumMap = map[string]SocketType{
@@ -177,6 +182,12 @@ type AgentConfig struct {
 
 	// fields that are not controllable by the user
 	OutputFileDescriptors []uintptr
+
+	// CPU or Heap profile
+	ProfilingEnabled bool
+	ProfilerS3Bucket string
+	HeapProfilePath  string
+	CpuProfilePath   string
 }
 
 func getEnvValueAsFloat(varName string, defaultValue float64) float64 {
@@ -515,4 +526,20 @@ func (config *AgentConfig) SetDefaults() {
 	config.HcDisconnectedTimeout = time.Duration(
 		getEnvValueAsInt("HC_DISCONNECTED_TIMEOUT_S", HC_DISCONNECTED_TIMEOUT_S_DEFAULT)) * time.Second
 	validateTimers(config)
+
+	// Envoy CPU or Heap profiling
+	config.ProfilingEnabled = getEnvValueAsBool("ENABLE_PROFILE", ENABLE_PROFILE_DEFAULT)
+	if config.ProfilingEnabled {
+		if value, exists := os.LookupEnv("PROFILE_S3_BUCKET"); !exists {
+			log.Infof("Provide the env variable PROFILE_S3_BUCKET if you want to override the location of S3 bucket" +
+				" to upload the Envoy profiler data. Else the default S3 bucket that will be used is of name format" +
+				"`envoyprofiles-<region>-<AccountID>`. Also make sure that the task or instance Role has" +
+				" the permission to upload to the bucket.")
+			config.ProfilerS3Bucket = ""
+		} else {
+			config.ProfilerS3Bucket = value
+		}
+		config.CpuProfilePath = getEnvValueAsString("CPUPROFILE", CPUPROFILE_DEFAULT)
+		config.HeapProfilePath = getEnvValueAsString("HEAPPROFILE", HEAPPROFILE_DEFAULT)
+	}
 }

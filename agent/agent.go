@@ -14,8 +14,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/aws/aws-app-mesh-agent/agent/profiling"
+	sdkConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -33,6 +37,7 @@ import (
 	"github.com/aws/aws-app-mesh-agent/agent/listenerdraining"
 	"github.com/aws/aws-app-mesh-agent/agent/logging"
 	"github.com/aws/aws-app-mesh-agent/agent/messagesources"
+	_ "github.com/aws/aws-app-mesh-agent/agent/profiling"
 	"github.com/aws/aws-app-mesh-agent/agent/server"
 	"github.com/aws/aws-app-mesh-agent/agent/stats"
 	cap "kernel.org/pub/linux/libs/security/libcap/cap"
@@ -215,6 +220,19 @@ func keepCommandAlive(agentConfig config.AgentConfig, messageSource *messagesour
 			break
 		}
 
+		if agentConfig.ProfilingEnabled {
+			// Try uploading the profiling data just in case it was not triggered while
+			// signal handling. This will cover cases where no signal termination was
+			// received by the Envoy process crashed by itself. If there is already
+			// profiling upload to S3 in process it will just return.
+			uploadProfilingData(agentConfig, messageSource)
+			// If profiling is enabled then wait for some time until profile data is uploaded
+			// to S3. ListenerDrainWaitTime is a reasonable time to wait.
+			// After the success or failure of upload we would signal `SetAgentExit`.
+			log.Infof("Waiting %ds for Agent to upload profiler data to S3.", int(agentConfig.ListenerDrainWaitTime.Seconds()))
+			time.Sleep(agentConfig.ListenerDrainWaitTime)
+		}
+
 		if restartCount >= agentConfig.EnvoyRestartCount {
 			break
 		}
@@ -290,6 +308,10 @@ func setupSignalHandling(agentConfig config.AgentConfig, messageSources *message
 			case syscall.SIGTERM:
 				fallthrough
 			case syscall.SIGQUIT:
+				// Note: If profiling is enabled then Envoy is forcefully quit without graceful draining of listeners.
+				// Hence, the profiling enabled Envoy image should not be used in production.
+				// Swap below two method calls if you want to gracefully drain first before uploading profiles to S3.
+				uploadProfilingData(agentConfig, messageSources)
 				gracefullyDrainEnvoyListeners(agentConfig)
 				messageSources.SetAgentExit()
 			default:
@@ -297,6 +319,38 @@ func setupSignalHandling(agentConfig config.AgentConfig, messageSources *message
 			}
 		}
 	}()
+}
+
+func forceQuitQuitQuitEnvoy(agentConfig config.AgentConfig) {
+	envoyQuitQuitQuitUrl := fmt.Sprintf("%s://%s:%d%s",
+		agentConfig.EnvoyServerScheme,
+		agentConfig.EnvoyServerHostName,
+		agentConfig.EnvoyServerAdminPort,
+		"/quitquitquit")
+
+	log.Infof("Forcefully quit Envoy...")
+
+	httpClient, err := client.CreateDefaultHttpClientForEnvoyServer(agentConfig)
+	if err != nil {
+		log.Errorf("unable to create a default Http Client: %v", err)
+		return
+	}
+
+	res, err := httpClient.Post(envoyQuitQuitQuitUrl, "text/html; charset=utf-8", nil)
+
+	if err != nil {
+		log.Warnf("Unable to quit Envoy: %v", err)
+		return
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		log.Warnf("Failed to quit Envoy [response %d - %s]", res.StatusCode, res.Status)
+		return
+	}
+
+	log.Infof("Waiting 1s for Envoy to quit.")
+	time.Sleep(1 * time.Second)
 }
 
 // TODO: Refactor this to reuse functionality from listenerdraining package
@@ -339,6 +393,45 @@ func gracefullyDrainEnvoyListeners(agentConfig config.AgentConfig) {
 
 	log.Infof("Waiting %ds for Envoy to drain listeners.", int(agentConfig.ListenerDrainWaitTime.Seconds()))
 	time.Sleep(agentConfig.ListenerDrainWaitTime)
+}
+
+func uploadProfilingData(agentConfig config.AgentConfig, messageSources *messagesources.MessageSources) {
+	if agentConfig.ProfilingEnabled {
+		if !messageSources.GetProfilingStarted() {
+			messageSources.SetProfilingStarted()
+			// Force quit Envoy so that we force profile generation. We are not gracefully draining the Envoy listeners
+			// because not enough time to do both upload profiler data and drain listeners. So expect some request
+			// failure while using profiler enabled Envoy image during task/pod termination or replacement.
+			forceQuitQuitQuitEnvoy(agentConfig)
+
+			log.Infof("Profiling is enabled, will upload CPU & Heap profile data to S3...")
+			s3BucketRegion, accountID, err := profiling.GetRegionAndAccountID()
+			if err != nil {
+				log.Errorf("Failed to get region & accountID with error: %v", err)
+			} else {
+				sdkDefaultConfig, err := sdkConfig.LoadDefaultConfig(context.TODO(), sdkConfig.WithRegion(s3BucketRegion))
+				if err != nil {
+					log.Errorf("couldn't load default configuration due to: %v", err)
+				} else {
+					profilingDataUploader := profiling.S3DataUploader{
+						ProfilerS3Bucket: agentConfig.ProfilerS3Bucket,
+						CpuProfilePath:   agentConfig.CpuProfilePath,
+						HeapProfilePath:  agentConfig.HeapProfilePath,
+						S3Client:         s3.NewFromConfig(sdkDefaultConfig),
+						AccountID:        accountID,
+						S3BucketRegion:   s3BucketRegion,
+					}
+					if err := profilingDataUploader.UploadProfileToS3Bucket(); err != nil {
+						log.Errorf("Failed to upload envoy heap/cpu profile data to S3 bucket for reason: %v\\n", err)
+					}
+				}
+			}
+		} else {
+			log.Debugf("Profile collection started already")
+		}
+	} else {
+		log.Debugf("No profiling enabled.")
+	}
 }
 
 func setupHttpServer(agentConfig config.AgentConfig,
@@ -578,6 +671,16 @@ func main() {
 	if agentConfig.EnableStatsSnapshot {
 		log.Debug("Enabling stats snapshot...")
 		go snapshotter.StartSnapshot(agentConfig)
+	}
+
+	// Enable CPU & Heap profiling
+	if agentConfig.ProfilingEnabled {
+		// TODO: Store the files on a sub-folder with names uniquely generated (based on Pid?) to avoid over writing on restart.
+		log.Debugf("Enabling CPU profiling at path: %s and Heap profiling at path: %s...",
+			agentConfig.CpuProfilePath,
+			agentConfig.HeapProfilePath)
+		os.Setenv("CPUPROFILE", agentConfig.CpuProfilePath)
+		os.Setenv("HEAPPROFILE", agentConfig.HeapProfilePath)
 	}
 
 	// Start the agent http server only if APPNET_AGENT_ADMIN_MODE is set

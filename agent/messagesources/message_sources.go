@@ -31,6 +31,7 @@ type MessageSources struct {
 	forkedPid                  int
 	lastPidCheck               int64
 	processRestartCount        int
+	profilingStarted           bool
 }
 
 func (messageSources *MessageSources) SetupChannels() {
@@ -46,6 +47,7 @@ func (messageSources *MessageSources) SetupChannels() {
 	messageSources.forkedPid = -1
 	messageSources.lastPidCheck = 0
 	messageSources.processRestartCount = 0
+	messageSources.profilingStarted = false
 }
 
 func (messageSources *MessageSources) readChannels() {
@@ -130,6 +132,10 @@ func (messageSources *MessageSources) SetPidCheckTime(checkTime int64) {
 	}
 }
 
+func (messageSources *MessageSources) SetProfilingStarted() {
+	messageSources.profilingStarted = true
+}
+
 func (messageSources *MessageSources) GetTerminateProcess() bool {
 	messageSources.readChannels()
 	return messageSources.terminateProcess
@@ -166,4 +172,9 @@ func (messageSources *MessageSources) GetAgentExit() bool {
 	<-messageSources.agentExit
 
 	return true
+}
+
+func (messageSources *MessageSources) GetProfilingStarted() bool {
+	messageSources.readChannels()
+	return messageSources.profilingStarted
 }

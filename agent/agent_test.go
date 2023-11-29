@@ -329,6 +329,15 @@ func TestGracefullyDrainEnvoyListeners(t *testing.T) {
 	assert.Less(t, time.Since(start), executionTime)
 }
 
+// FIXME
+//func TestUploadProfilingData(t *testing.T) {
+//	os.Setenv("ENABLE_PROFILE", "true")
+//	defer os.Unsetenv("HEAPPROFILE")
+//
+//	var agentConfig config.AgentConfig
+//	agentConfig.SetDefaults()
+//}
+
 func getTmpDir() string {
 	tempDir := os.Getenv("TMPDIR")
 	if len(tempDir) == 0 {

@@ -229,7 +229,7 @@ func TestGetEcsContainerMetadata(t *testing.T) {
 func TestGetAZFromEc2InstanceMetadata(t *testing.T) {
 	setup()
 	// Don't Exceed the default timeout of 250ms for http call
-	// from inside the func `getEc2InstanceMetadata`
+	// from inside the func `GetEc2InstanceMetadata`
 	azQueryImdsReqRes := ImdsReqRes{query: azQuery, method: "GET", response: "us-west-2d", header: ec2ImdsTokenHeader}
 	tokenQueryImdsReqRes := ImdsReqRes{query: "token", method: "PUT", response: "non-empty-token", header: ec2ImdsTokenTtlHeader}
 	srv := setupEc2MetadataServer([]ImdsReqRes{azQueryImdsReqRes, tokenQueryImdsReqRes}, 200*time.Millisecond)
@@ -237,7 +237,7 @@ func TestGetAZFromEc2InstanceMetadata(t *testing.T) {
 	os.Setenv(ec2MetadataUriEnvForTesting, srv.URL)
 	defer os.Unsetenv(ec2MetadataUriEnvForTesting)
 
-	az, err := getEc2InstanceMetadata(azQuery)
+	az, err := GetEc2InstanceMetadata(azQuery)
 
 	assert.Nil(t, err)
 	assert.NotNil(t, az)
@@ -247,7 +247,7 @@ func TestGetAZFromEc2InstanceMetadata(t *testing.T) {
 func TestGetAZIDFromEc2InstanceMetadata(t *testing.T) {
 	setup()
 	// Don't Exceed the default timeout of 250ms for http call
-	// from inside the func `getEc2InstanceMetadata`
+	// from inside the func `GetEc2InstanceMetadata`
 	azIDQueryImdsReqRes := ImdsReqRes{query: azIDQuery, method: "GET", response: "usw2-az2", header: ec2ImdsTokenHeader}
 	tokenQueryImdsReqRes := ImdsReqRes{query: "token", method: "PUT", response: "non-empty-token", header: ec2ImdsTokenTtlHeader}
 	srv := setupEc2MetadataServer([]ImdsReqRes{azIDQueryImdsReqRes, tokenQueryImdsReqRes}, 200*time.Millisecond)
@@ -255,7 +255,7 @@ func TestGetAZIDFromEc2InstanceMetadata(t *testing.T) {
 	os.Setenv(ec2MetadataUriEnvForTesting, srv.URL)
 	defer os.Unsetenv(ec2MetadataUriEnvForTesting)
 
-	azID, err := getEc2InstanceMetadata(azIDQuery)
+	azID, err := GetEc2InstanceMetadata(azIDQuery)
 
 	assert.Nil(t, err)
 	assert.NotNil(t, azID)
@@ -265,7 +265,7 @@ func TestGetAZIDFromEc2InstanceMetadata(t *testing.T) {
 func TestEc2InstanceMetadataTimeout(t *testing.T) {
 	setup()
 	// Exceed the default timeout of 250ms for http call
-	// from inside the func `getEc2InstanceMetadata`
+	// from inside the func `GetEc2InstanceMetadata`
 	azQueryImdsReqRes := ImdsReqRes{query: azQuery, method: "GET", response: "us-west-2d", header: ""}
 	azIDQueryImdsReqRes := ImdsReqRes{query: azIDQuery, method: "GET", response: "usw2-az2", header: ""}
 	tokenQueryImdsReqRes := ImdsReqRes{query: "token", method: "PUT", response: "non-empty-token", header: ec2ImdsTokenTtlHeader}
@@ -274,11 +274,11 @@ func TestEc2InstanceMetadataTimeout(t *testing.T) {
 	os.Setenv(ec2MetadataUriEnvForTesting, srv.URL)
 	defer os.Unsetenv(ec2MetadataUriEnvForTesting)
 
-	az, err := getEc2InstanceMetadata(azQuery)
+	az, err := GetEc2InstanceMetadata(azQuery)
 	assert.NotNil(t, err)
 	assert.Empty(t, az)
 
-	azID, err := getEc2InstanceMetadata(azIDQuery)
+	azID, err := GetEc2InstanceMetadata(azIDQuery)
 	assert.NotNil(t, err)
 	assert.Empty(t, azID)
 }
@@ -294,12 +294,12 @@ func TestEc2InstanceMetadataUnsecure(t *testing.T) {
 	os.Setenv(ec2MetadataUriEnvForTesting, srv.URL)
 	defer os.Unsetenv(ec2MetadataUriEnvForTesting)
 
-	az, err := getEc2InstanceMetadata(azQuery)
+	az, err := GetEc2InstanceMetadata(azQuery)
 	assert.Nil(t, err)
 	assert.NotNil(t, az)
 	assert.Equal(t, "us-west-2d", az)
 
-	azID, err := getEc2InstanceMetadata(azIDQuery)
+	azID, err := GetEc2InstanceMetadata(azIDQuery)
 	assert.Nil(t, err)
 	assert.NotNil(t, azID)
 	assert.Equal(t, "usw2-az2", azID)
@@ -316,12 +316,12 @@ func TestEc2InstanceMetadataTokenRequestFails(t *testing.T) {
 	os.Setenv(ec2MetadataUriEnvForTesting, srv.URL)
 	defer os.Unsetenv(ec2MetadataUriEnvForTesting)
 
-	az, err := getEc2InstanceMetadata(azQuery)
+	az, err := GetEc2InstanceMetadata(azQuery)
 	assert.Nil(t, err)
 	assert.NotNil(t, az)
 	assert.Equal(t, "us-west-2d", az)
 
-	azID, err := getEc2InstanceMetadata(azIDQuery)
+	azID, err := GetEc2InstanceMetadata(azIDQuery)
 	assert.Nil(t, err)
 	assert.NotNil(t, azID)
 	assert.Equal(t, "usw2-az2", azID)
