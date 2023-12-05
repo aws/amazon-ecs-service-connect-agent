@@ -73,6 +73,10 @@ func buildCommandArgs(agentConfig config.AgentConfig) []string {
 		args = append(args, strconv.Itoa(listenerDrainWaitTime))
 	}
 
+	if agentConfig.DisableHotRestart {
+		args = append(args, "--disable-hot-restart")
+	}
+
 	if len(agentConfig.CommandArgs) > 0 {
 		args = append(args, agentConfig.CommandArgs...)
 	}
