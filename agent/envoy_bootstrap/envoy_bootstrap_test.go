@@ -674,7 +674,6 @@ metadata:
     envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
     envoy.reloadable_features.no_extension_lookup_by_name: true
     envoy.reloadable_features.sanitize_original_path: true
-    envoy.reloadable_features.successful_active_health_check_uneject_host: false
     re2.max_program_size.error_level: 1000
 `)
 }
@@ -687,8 +686,6 @@ func TestBuildNodeMetadata_StaticRuntimeMappingDefaultOverridden(t *testing.T) {
 	defer os.Unsetenv("ENVOY_NO_EXTENSION_LOOKUP_BY_NAME")
 	os.Setenv("ENVOY_SANITIZE_ORIGINAL_PATH", "false")
 	defer os.Unsetenv("ENVOY_SANITIZE_ORIGINAL_PATH")
-	os.Setenv("ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST", "true")
-	defer os.Unsetenv("ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST")
 	os.Setenv("MAX_REQUESTS_PER_IO_CYCLE", "1")
 	defer os.Unsetenv("MAX_REQUESTS_PER_IO_CYCLE")
 	metadata, err := buildMetadataForNode()
@@ -703,7 +700,6 @@ metadata:
     envoy.reloadable_features.http_set_tracing_decision_in_request_id: false
     envoy.reloadable_features.no_extension_lookup_by_name: false
     envoy.reloadable_features.sanitize_original_path: false
-    envoy.reloadable_features.successful_active_health_check_uneject_host: true
     re2.max_program_size.error_level: 1000
     http.max_requests_per_io_cycle: 1
 `)
@@ -723,7 +719,6 @@ layers:
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
       envoy.reloadable_features.sanitize_original_path: true
-      envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -746,7 +741,6 @@ layers:
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: false
       envoy.reloadable_features.no_extension_lookup_by_name: true
       envoy.reloadable_features.sanitize_original_path: true
-      envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -769,7 +763,6 @@ layers:
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: false
       envoy.reloadable_features.sanitize_original_path: true
-      envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -792,30 +785,6 @@ layers:
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
       envoy.reloadable_features.sanitize_original_path: false
-      envoy.reloadable_features.successful_active_health_check_uneject_host: false
-      re2.max_program_size.error_level: 1000
-  - name: "admin_layer"
-    adminLayer: {}
-`)
-}
-
-func TestBuildLayeredRuntime_ActiveHealthcheckUnejectHost(t *testing.T) {
-	setup()
-	os.Setenv("ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST", "true")
-	defer os.Unsetenv("ENVOY_ACTIVE_HEALTH_CHECK_UNEJECT_HOST")
-	rt, err := buildLayeredRuntime()
-	if err != nil {
-		t.Error(err)
-	}
-	checkMessage(t, rt, `
-layers:
-  - name: "static_layer_0"
-    staticLayer:
-      envoy.features.enable_all_deprecated_features: true
-      envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
-      envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.sanitize_original_path: true
-      envoy.reloadable_features.successful_active_health_check_uneject_host: true
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -838,7 +807,6 @@ layers:
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
       envoy.reloadable_features.sanitize_original_path: true
-      envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
       http.max_requests_per_io_cycle: 1
   - name: "admin_layer"
@@ -862,7 +830,6 @@ layers:
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
       envoy.reloadable_features.sanitize_original_path: true
-      envoy.reloadable_features.successful_active_health_check_uneject_host: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
