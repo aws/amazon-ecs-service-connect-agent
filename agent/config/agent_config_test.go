@@ -44,6 +44,7 @@ func TestPopulateDefaultAgentConfig(t *testing.T) {
 	assert.NotEmpty(t, agentConfig.EnvoyConfigPath)
 	assert.True(t, strings.HasSuffix(agentConfig.EnvoyConfigPath, ".yaml"))
 	assert.Empty(t, agentConfig.ClusterIPMapping)
+	assert.False(t, agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
 }
 
 func TestPopulateAgentConfigWithEnvVars(t *testing.T) {
@@ -95,6 +96,17 @@ func TestEnvoyAdminModeUds(t *testing.T) {
 	assert.Equal(t, UDS, agentConfig.EnvoyAdminMode)
 }
 
+func TestEnvoyOverrideUseHttpClient(t *testing.T) {
+	os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", "true")
+	defer os.Unsetenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
+	var agentConfig AgentConfig
+
+	agentConfig.SetDefaults()
+
+	assert.NotNil(t, agentConfig)
+	assert.True(t, agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
+}
+
 func TestEnableRelayModeForXds(t *testing.T) {
 	os.Setenv("APPNET_ENABLE_RELAY_MODE_FOR_XDS", "1")
 	os.Setenv("APPNET_AGENT_ADMIN_MODE", "UDS")
@@ -112,6 +124,7 @@ func TestEnableRelayModeForXds(t *testing.T) {
 	assert.Equal(t, 443, agentConfig.AppNetManagementPort)
 	assert.Equal(t, "2400s", agentConfig.RelayStreamIdleTimeout)
 	assert.Equal(t, 10485760, agentConfig.RelayBufferLimitBytes)
+	assert.False(t, agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
 }
 
 func TestEnableRelayModeForXds_domainWithScheme(t *testing.T) {

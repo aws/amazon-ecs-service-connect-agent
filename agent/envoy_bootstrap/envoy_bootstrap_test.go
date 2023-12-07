@@ -2975,6 +2975,9 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariables(t *testing.T) {
 
 	_, f_exists := os.LookupEnv("RELAY_BUFFER_LIMIT_BYTES")
 	assert.True(t, f_exists)
+
+	_, g_exists := os.LookupEnv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
+	assert.True(t, g_exists)
 }
 
 func TestRelayBootstrap_DefaultValuesSetForEnvVariableFips(t *testing.T) {
@@ -3010,6 +3013,9 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariableFips(t *testing.T) {
 
 	_, f_exists := os.LookupEnv("RELAY_BUFFER_LIMIT_BYTES")
 	assert.True(t, f_exists)
+
+	_, g_exists := os.LookupEnv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
+	assert.True(t, g_exists)
 }
 
 func TestRelayBootstrap_DefaultValuesSetForEnvVariablesInGovCloud(t *testing.T) {
@@ -3045,6 +3051,9 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariablesInGovCloud(t *testing.T) 
 
 	_, f_exists := os.LookupEnv("RELAY_BUFFER_LIMIT_BYTES")
 	assert.True(t, f_exists)
+
+	_, g_exists := os.LookupEnv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
+	assert.True(t, g_exists)
 }
 
 func TestRelayBootstrap_NotFipsCompatibleInGovCloud(t *testing.T) {

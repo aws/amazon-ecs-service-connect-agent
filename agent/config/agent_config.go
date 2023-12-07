@@ -49,6 +49,8 @@ const (
 
 	ENABLE_STATS_SNAPSHOT_DEFAULT = false
 
+	ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS_DEFAULT = false
+
 	ENVOY_SERVER_SCHEME                  = "http"
 	ENVOY_SERVER_HOSTNAME                = "127.0.0.1"
 	ENVOY_RESTART_COUNT_DEFAULT          = 0
@@ -169,6 +171,9 @@ type AgentConfig struct {
 	AppNetRelayListenerUdsPath string
 	RelayStreamIdleTimeout     string
 	RelayBufferLimitBytes      int
+
+	// Libcurl deprecation Envoy reloadable feature flag
+	EnvoyUseHttpClientToFetchAwsCredentials bool
 
 	// Poll intervals
 	PidPollInterval       time.Duration
@@ -448,6 +453,9 @@ func (config *AgentConfig) SetDefaults() {
 			config.AppNetManagementDomainName = xdsDomain
 		}
 	}
+
+	// Libcurl deprecation Envoy reloadable feature flag
+	config.EnvoyUseHttpClientToFetchAwsCredentials = getEnvValueAsBool("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS_DEFAULT)
 
 	config.AgentAdminMode = getAdminModeFromEnv("APPNET_AGENT_ADMIN_MODE", AGENT_ADMIN_MODE_DEFAULT)
 	if config.AgentAdminMode == UDS {
