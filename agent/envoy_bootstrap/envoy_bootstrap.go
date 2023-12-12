@@ -128,6 +128,11 @@ func getRuntimeConfigLayer0() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	setUseHttpClientToFetchAwsCredentials, err := env.TruthyOrElse("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", config.ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS_DEFAULT)
+	if err != nil {
+		return nil, err
+	}
+
 	// ====== Runtime config with defaults set ======
 	result := map[string]interface{}{
 		// Allow all deprecated features to be enabled by Envoy. This prevents warnings or hard errors when
@@ -156,6 +161,16 @@ func getRuntimeConfigLayer0() (map[string]interface{}, error) {
 		// in request path logged in traces and access logs. So in case user wants to keep the original behavior because
 		// CVE is not applicable in their case then they can set Envoy env variable ENVOY_SANITIZE_ORIGINAL_PATH to `false`.
 		"envoy.reloadable_features.sanitize_original_path": setSanitizeOriginalPath,
+
+		// Default is set to false.
+		// Envoy introduced an option to use http async client to fetch aws metadata credentials instead of using libcurl.
+		// This effort was to deprecated the usage of libcurl in Envoy.
+		// See:
+		// https://github.com/envoyproxy/envoy/pull/29880
+		// https://github.com/envoyproxy/envoy/pull/30626
+		// https://github.com/envoyproxy/envoy/pull/30731
+		// https://github.com/envoyproxy/envoy/pull/31135
+		"envoy.reloadable_features.use_http_client_to_fetch_aws_credentials": setUseHttpClientToFetchAwsCredentials,
 	}
 
 	// ====== Runtime config with no defaults set ======
@@ -1647,6 +1662,12 @@ func setRelayBootstrapEnvVariables(agentConfig config.AgentConfig, envoyCLIInst 
 		log.Infof("RELAY_BUFFER_LIMIT_BYTES is not set, setting default value as: %v", agentConfig.RelayBufferLimitBytes)
 		os.Setenv("RELAY_BUFFER_LIMIT_BYTES", fmt.Sprint(agentConfig.RelayBufferLimitBytes))
 	}
+
+	if _, exists := os.LookupEnv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS"); !exists {
+		log.Infof("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS is not set, setting default value as: %v", agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
+		os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", fmt.Sprint(agentConfig.EnvoyUseHttpClientToFetchAwsCredentials))
+	}
+
 	return nil
 }
 
