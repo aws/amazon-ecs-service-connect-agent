@@ -123,11 +123,6 @@ func getRuntimeConfigLayer0() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	setSanitizeOriginalPath, err := env.TruthyOrElse("ENVOY_SANITIZE_ORIGINAL_PATH", true)
-	if err != nil {
-		return nil, err
-	}
-
 	setUseHttpClientToFetchAwsCredentials, err := env.TruthyOrElse("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", config.ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS_DEFAULT)
 	if err != nil {
 		return nil, err
@@ -151,16 +146,6 @@ func getRuntimeConfigLayer0() (map[string]interface{}, error) {
 		// If set to false Envoy will still lookup extension by name.
 		// Refer to https://www.envoyproxy.io/docs/envoy/latest/version_history/v1.22.0#minor-behavior-changes
 		"envoy.reloadable_features.no_extension_lookup_by_name": setNoExtensionLookupByName,
-
-		// Default is set to true.
-		// Envoy fixed a bug where `x-envoy-original-path` was not being sanitized when sent from untrusted users.
-		// This bug fix was done to address a CVE https://nvd.nist.gov/vuln/detail/CVE-2023-27487
-		// https://github.com/envoyproxy/envoy/commit/4a8cc2eabaf3d1300f84fe8df333064bfe2fafcd
-		// See https://www.envoyproxy.io/docs/envoy/v1.25.4/version_history/v1.25/v1.25.4#bug-fixes
-		// This introduced a behavioral change where `x-envoy-original-path` won't be propagated leading to potential change
-		// in request path logged in traces and access logs. So in case user wants to keep the original behavior because
-		// CVE is not applicable in their case then they can set Envoy env variable ENVOY_SANITIZE_ORIGINAL_PATH to `false`.
-		"envoy.reloadable_features.sanitize_original_path": setSanitizeOriginalPath,
 
 		// Default is set to false.
 		// Envoy introduced an option to use http async client to fetch aws metadata credentials instead of using libcurl.
