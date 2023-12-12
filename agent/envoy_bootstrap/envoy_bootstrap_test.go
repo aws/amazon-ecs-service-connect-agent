@@ -673,7 +673,6 @@ metadata:
     envoy.features.enable_all_deprecated_features: true
     envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
     envoy.reloadable_features.no_extension_lookup_by_name: true
-    envoy.reloadable_features.sanitize_original_path: true
     envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
     re2.max_program_size.error_level: 1000
 `)
@@ -685,8 +684,6 @@ func TestBuildNodeMetadata_StaticRuntimeMappingDefaultOverridden(t *testing.T) {
 	defer os.Unsetenv("APPMESH_SET_TRACING_DECISION")
 	os.Setenv("ENVOY_NO_EXTENSION_LOOKUP_BY_NAME", "false")
 	defer os.Unsetenv("ENVOY_NO_EXTENSION_LOOKUP_BY_NAME")
-	os.Setenv("ENVOY_SANITIZE_ORIGINAL_PATH", "false")
-	defer os.Unsetenv("ENVOY_SANITIZE_ORIGINAL_PATH")
 	os.Setenv("MAX_REQUESTS_PER_IO_CYCLE", "1")
 	defer os.Unsetenv("MAX_REQUESTS_PER_IO_CYCLE")
 	os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", "true")
@@ -702,7 +699,6 @@ metadata:
     envoy.features.enable_all_deprecated_features: true
     envoy.reloadable_features.http_set_tracing_decision_in_request_id: false
     envoy.reloadable_features.no_extension_lookup_by_name: false
-    envoy.reloadable_features.sanitize_original_path: false
     envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: true
     re2.max_program_size.error_level: 1000
     http.max_requests_per_io_cycle: 1
@@ -722,7 +718,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.sanitize_original_path: true
       envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
@@ -745,7 +740,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: false
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.sanitize_original_path: true
       envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
@@ -768,30 +762,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: false
-      envoy.reloadable_features.sanitize_original_path: true
-      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
-      re2.max_program_size.error_level: 1000
-  - name: "admin_layer"
-    adminLayer: {}
-`)
-}
-
-func TestBuildLayeredRuntime_DontSanitizeOriginalPath(t *testing.T) {
-	setup()
-	os.Setenv("ENVOY_SANITIZE_ORIGINAL_PATH", "false")
-	defer os.Unsetenv("ENVOY_SANITIZE_ORIGINAL_PATH")
-	rt, err := buildLayeredRuntime()
-	if err != nil {
-		t.Error(err)
-	}
-	checkMessage(t, rt, `
-layers:
-  - name: "static_layer_0"
-    staticLayer:
-      envoy.features.enable_all_deprecated_features: true
-      envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
-      envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.sanitize_original_path: false
       envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
@@ -814,7 +784,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.sanitize_original_path: true
       envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
       re2.max_program_size.error_level: 1000
       http.max_requests_per_io_cycle: 1
@@ -838,7 +807,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.sanitize_original_path: true
       envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
@@ -861,7 +829,6 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.sanitize_original_path: true
       envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: true
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
