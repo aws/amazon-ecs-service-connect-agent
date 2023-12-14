@@ -16,7 +16,6 @@ package config
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -49,7 +48,7 @@ const (
 
 	ENABLE_STATS_SNAPSHOT_DEFAULT = false
 
-	ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS_DEFAULT = false
+	ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS_DEFAULT = true
 
 	ENVOY_SERVER_SCHEME                  = "http"
 	ENVOY_SERVER_HOSTNAME                = "127.0.0.1"
@@ -75,6 +74,14 @@ const (
 	RELAY_STREAM_IDLE_TIMEOUT_DEFAULT      = "2400s"  // Default is set to 40 min, whereas Envoy default is 5 min.
 	RELAY_BUFFER_LIMIT_BYTES_DEFAULT       = 10485760 // Default is set to 10MB, whereas Envoy default is 1 MB.
 	APPNET_MANAGEMENT_PORT_DEFAULT         = 443
+
+	// local agent relay mode
+	ENABLE_LOCAL_RELAY_MODE_FOR_XDS_DEFAULT    = false
+	APPNET_LOCAL_RELAY_LISTENER_PORT_DEFAULT   = 15003
+	APPNET_LOCAL_RELAY_ADMIN_PORT_DEFAULT      = 9903
+	APPNET_LOCAL_RELAY_ADMIN_HOST_DEFAULT      = "127.0.0.1"
+	APPNET_LOCAL_RELAY_LOG_DESTINATION_DEFAULT = "/tmp"
+	APPNET_LOCAL_RELAY_LOG_FILE_NAME_DEFAULT   = "local_relay_appnet_envoy.log"
 
 	// agent handled endpoints
 	AGENT_STATS_ENDPOINT_URL          = "/stats/prometheus"
@@ -171,6 +178,16 @@ type AgentConfig struct {
 	AppNetRelayListenerUdsPath string
 	RelayStreamIdleTimeout     string
 	RelayBufferLimitBytes      int
+
+	// Local Relay Mode required for AppMesh Envoy to sign xDS requests
+	EnableLocalRelayModeForXds        bool
+	LocalRelayEnvoyConcurrency        int
+	LocalRelayEnvoyConfigPath         string
+	LocalRelayEnvoyListenerPort       int
+	LocalRelayEnvoyAdminPort          int
+	LocalRelayEnvoyAdminHost          string
+	LocalRelayEnvoyLoggingDestination string
+	LocalRelayEnvoyLogFileName        string
 
 	// Libcurl deprecation Envoy reloadable feature flag
 	EnvoyUseHttpClientToFetchAwsCredentials bool
@@ -298,9 +315,8 @@ func dumpAllEnvVariables() {
 	log.Infof("Agent Environment Variables: %v", agentVar)
 }
 
-func getDefaultBootstrapFilePath() string {
-
-	tmpFile, err := ioutil.TempFile(os.TempDir(), "envoy-config-*.yaml")
+func GetDefaultBootstrapFilePath() string {
+	tmpFile, err := os.CreateTemp(os.TempDir(), "envoy-config-*.yaml")
 	if err != nil {
 		log.Errorf("Cannot create bootstrap file. %v", err)
 	}
@@ -421,6 +437,13 @@ func (config *AgentConfig) ParseFlags(args []string) {
 	flags.Parse(args[1:])
 }
 
+func (config *AgentConfig) SetLocalRelayDefaults() {
+	// xDS Local Relay
+	config.LocalRelayEnvoyConcurrency = 1
+	config.RelayStreamIdleTimeout = getEnvValueAsString("RELAY_STREAM_IDLE_TIMEOUT", RELAY_STREAM_IDLE_TIMEOUT_DEFAULT)
+	config.RelayBufferLimitBytes = getEnvValueAsInt("RELAY_BUFFER_LIMIT_BYTES", RELAY_BUFFER_LIMIT_BYTES_DEFAULT)
+}
+
 func (config *AgentConfig) SetDefaults() {
 
 	config.CommandPath = "/usr/bin/envoy"
@@ -452,7 +475,19 @@ func (config *AgentConfig) SetDefaults() {
 		} else {
 			config.AppNetManagementDomainName = xdsDomain
 		}
+	} else {
+		// Set this value as it is used in AppMesh mode. If this is running in ECS Service Connect mode it will not be used.
+		config.LocalRelayEnvoyListenerPort = getEnvValueAsInt("APPNET_LOCAL_RELAY_LISTENER_PORT", APPNET_LOCAL_RELAY_LISTENER_PORT_DEFAULT)
+		config.LocalRelayEnvoyAdminPort = getEnvValueAsInt("APPNET_LOCAL_RELAY_ADMIN_PORT", APPNET_LOCAL_RELAY_ADMIN_PORT_DEFAULT)
+		config.LocalRelayEnvoyAdminHost = getEnvValueAsString("APPNET_LOCAL_RELAY_ADMIN_HOST", APPNET_LOCAL_RELAY_ADMIN_HOST_DEFAULT)
+		config.LocalRelayEnvoyLoggingDestination = getEnvValueAsString("APPNET_LOCAL_RELAY_LOG_DESTINATION", APPNET_LOCAL_RELAY_LOG_DESTINATION_DEFAULT)
+		config.LocalRelayEnvoyLogFileName = getEnvValueAsString("APPNET_LOCAL_RELAY_LOG_FILE_NAME", APPNET_LOCAL_RELAY_LOG_FILE_NAME_DEFAULT)
 	}
+
+	// xDS Local Relay (required only for AppMesh).
+	// To determine if Local Relay Envoy has to be enabled to sign xDS requests.
+	// Defaults to False and will be overridden while processing node id prior to bootstrap generation.
+	config.EnableLocalRelayModeForXds = ENABLE_LOCAL_RELAY_MODE_FOR_XDS_DEFAULT
 
 	// Libcurl deprecation Envoy reloadable feature flag
 	config.EnvoyUseHttpClientToFetchAwsCredentials = getEnvValueAsBool("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS_DEFAULT)
@@ -505,7 +540,7 @@ func (config *AgentConfig) SetDefaults() {
 	config.MaxLogFileSizeMB = getEnvValueAsFloat("APPNET_AGENT_MAX_LOG_FILE_SIZE", AGENT_MAX_LOG_FILE_SIZE_DEFAULT)
 	config.MaxLogCount = getEnvValueAsInt("APPNET_AGENT_MAX_RETENTION_COUNT", AGENT_MAX_LOG_RETENTION_DEFAULT)
 	if config.EnvoyConfigPath == "" {
-		config.EnvoyConfigPath = getEnvValueAsString("ENVOY_CONFIG_FILE", getDefaultBootstrapFilePath())
+		config.EnvoyConfigPath = getEnvValueAsString("ENVOY_CONFIG_FILE", GetDefaultBootstrapFilePath())
 	}
 
 	config.EnvoyConcurrency = getEnvValueAsInt("ENVOY_CONCURRENCY", ENVOY_CONCURRENCY_DEFAULT)

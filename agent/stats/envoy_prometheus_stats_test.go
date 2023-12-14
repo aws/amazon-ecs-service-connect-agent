@@ -262,6 +262,60 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Metrics_
 	assert.Equal(t, expectedResponse, string(resBody))
 }
 
+func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_SingleSnapshot(t *testing.T) {
+	os.Setenv("ENVOY_ADMIN_MODE", config.ENVOY_ADMIN_MODE_DEFAULT)
+	defer os.Unsetenv("ENVOY_ADMIN_MODE")
+
+	// Mock an Envoy server since we are not spawning an Envoy for this unit test
+	// 1. Ideally the sampleStatsOutput from Envoy stats endpoint should already be sorted, but we are testing our sort
+	// logic below, so the "envoy_appmesh_GrpcRequestCount" metric was placed in a reversed order which is expected to
+	// be sorted later by the HandleStats function.
+	// 2. We should also see the "envoy_cluster_default_total_match_count" being filtered out.
+	sampleStatsOutput := "# TYPE envoy_appmesh_GrpcRequestCount counter\n" +
+		"envoy_appmesh_GrpcRequestCount{Mesh=\"howto-k8s-http2\",VirtualNode=\"client_howto-k8s-http2\"} 0\n" +
+		"envoy_appmesh_GrpcRequestCount{Mesh=\"howto-k8s-http1\",VirtualNode=\"client_howto-k8s-http1\"} 0\n" +
+		"# TYPE envoy_appmesh_NewConnectionCount counter\n" +
+		"envoy_appmesh_NewConnectionCount{Mesh=\"howto-k8s-http2\",VirtualNode=\"client_howto-k8s-http2\"} 0\n" +
+		"# TYPE envoy_cluster_default_total_match_count counter\n" +
+		"envoy_cluster_default_total_match_count{Mesh=\"howto-k8s-http2\",VirtualNode=\"client_howto-k8s-http2\",envoy_cluster_name=\"cds_egress_howto-k8s-http2_amazonaws\"} 0\n"
+	envoy := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		queryParameters, _ := url.ParseQuery(request.URL.RawQuery)
+		if queryParameters.Get("filter") == "appmesh" {
+			io.WriteString(writer, sampleStatsOutput)
+		}
+	}))
+
+	// Setup an http server that serves stats request
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	envoyStatsHandler := buildHandler(agentConfig)
+	// Update EnvoyServer info to honor the mock Envoy server
+	envoyUrl, err := url.Parse(envoy.URL)
+	assert.NoError(t, err)
+	envoyStatsHandler.AgentConfig.EnvoyServerScheme = envoyUrl.Scheme
+	envoyStatsHandler.AgentConfig.EnvoyServerHostName = envoyUrl.Hostname()
+	envoyStatsHandler.AgentConfig.EnvoyServerAdminPort, _ = strconv.Atoi(envoyUrl.Port())
+	statsServer := httptest.NewServer(http.HandlerFunc(envoyStatsHandler.HandleStats))
+	defer statsServer.Close()
+	filterParam := fmt.Sprintf("%s=%s", filterQueryKey, "metrics_extension")
+	requestUrl := fmt.Sprintf("%s?%s&%s", statsServer.URL, usedOnlyQueryKey, filterParam)
+	res, err := http.Get(requestUrl)
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	defer res.Body.Close()
+	resBody, err := ioutil.ReadAll(res.Body)
+	assert.NoError(t, err)
+	// Expect the filtered metrics
+	expectedResponse := "\n# TYPE GrpcRequestCount counter\n" +
+		"GrpcRequestCount{Mesh=\"howto-k8s-http1\",VirtualNode=\"client_howto-k8s-http1\"} 0\n" +
+		"GrpcRequestCount{Mesh=\"howto-k8s-http2\",VirtualNode=\"client_howto-k8s-http2\"} 0\n" +
+		"\n# TYPE NewConnectionCount counter\n" +
+		"NewConnectionCount{Mesh=\"howto-k8s-http2\",VirtualNode=\"client_howto-k8s-http2\"} 0\n"
+	assert.Equal(t, expectedResponse, string(resBody))
+}
+
 func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Delta_SingleSnapshot(t *testing.T) {
 	os.Setenv("ENVOY_ADMIN_MODE", config.ENVOY_ADMIN_MODE_DEFAULT)
 	defer os.Unsetenv("ENVOY_ADMIN_MODE")

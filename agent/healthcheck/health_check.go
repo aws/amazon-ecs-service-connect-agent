@@ -54,6 +54,7 @@ type HealthStatus struct {
 	AgentUptime                           string     `json:"agentUptime"`
 	EnvoyPid                              string     `json:"envoyPid"`
 	EnvoyState                            string     `json:"envoyState"`
+	LocalRelayEnvoyState                  string     `json:"localRelayEnvoyState"`
 	EnvoyRestartCount                     string     `json:"envoyRestartCount"`
 	ManagementServerConnectionStatus      string     `json:"managementServerConnectionStatus,omitempty"`
 	ManagementServerDisconnectedTimestamp *time.Time `json:"managementServerDisconnectedTimestamp,omitempty"`
@@ -83,10 +84,11 @@ func (healthStatusHandler *HealthStatusHandler) EnvoyStatus(response http.Respon
 }
 
 type EnvoyEndpointHttpData struct {
-	client         *http.Client
-	readyReq       *http.Request
-	statsReq       *http.Request
-	agentStartTime time.Time
+	client             *http.Client
+	readyReq           *http.Request
+	statsReq           *http.Request
+	readyReqLocalRelay *http.Request
+	agentStartTime     time.Time
 }
 
 func (healthStatus *HealthStatus) computeHealthStatus(
@@ -97,6 +99,28 @@ func (healthStatus *HealthStatus) computeHealthStatus(
 	healthStatus.AgentUptime = fmt.Sprintf("%.fs", time.Since(pollData.agentStartTime).Seconds())
 	healthStatus.EnvoyPid = strconv.Itoa(messageSources.GetPid())
 	healthStatus.EnvoyRestartCount = strconv.Itoa(messageSources.GetProcessRestartCount())
+
+	if agentConfig.EnableLocalRelayModeForXds {
+		// Get readiness response from '/ready' endpoint of Local Relay Envoy admin interface
+		// https://www.envoyproxy.io/docs/envoy/latest/operations/admin#get--ready
+		// Should output a string and error code reflecting the state of the server.
+		// 200 is returned for the LIVE state, and 503 otherwise.
+		response, err := pollData.client.Do(pollData.readyReqLocalRelay)
+		if err != nil {
+			log.Error("Local Relay Envoy readiness check failed with: ", err)
+			healthStatus.LocalRelayEnvoyState = "UNREACHABLE"
+		}
+		if response != nil {
+			responseBody, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				log.Warn("Local Relay Envoy readiness check failed to read response with: ", err)
+			}
+			healthStatus.LocalRelayEnvoyState = strings.TrimSpace(string(responseBody))
+			log.Debugf("Local Relay Envoy readiness check status %d, %s",
+				response.StatusCode, healthStatus.LocalRelayEnvoyState)
+			response.Body.Close()
+		}
+	}
 
 	// Get readiness response from '/ready' endpoint of Envoy admin interface
 	// https://www.envoyproxy.io/docs/envoy/latest/operations/admin#get--ready
@@ -198,6 +222,16 @@ func (healthStatus *HealthStatus) computeHealthCheck(agentConfig config.AgentCon
 	// - Even when initialized, Envoy is statically stable and hence continue to report healthy.
 	// - To prevent Envoy from getting stuck in a disconnected state, we define a configurable threshold crossing which
 	//   it starts reporting unhealthy.
+	if agentConfig.EnableLocalRelayModeForXds {
+		// If Local Relay in enabled and Local Relay Envoy is not in LIVE state
+		// (not initialized or not ready), overall Health Status is reported as Unhealthy.
+		switch healthStatus.LocalRelayEnvoyState {
+		case LIVE:
+		default:
+			healthStatus.HealthStatus = Unhealthy
+			return
+		}
+	}
 	switch healthStatus.EnvoyState {
 	case LIVE:
 		if healthStatus.InitialConfigUpdateStatus == UPDATE_FAILED {
@@ -255,6 +289,14 @@ func (healthStatus *HealthStatus) StartHealthCheck(
 
 	envoyEndPointData.readyReq, _ = client.CreateStandardAgentHttpRequest(http.MethodGet, readyUrl, nil)
 	envoyEndPointData.statsReq, _ = client.CreateStandardAgentHttpRequest(http.MethodGet, statsUrl, nil)
+
+	if agentConfig.EnableLocalRelayModeForXds {
+		var readyUrlForLocalRelay = fmt.Sprintf("%s:%d%s",
+			envoyAddress,
+			agentConfig.LocalRelayEnvoyAdminPort,
+			agentConfig.EnvoyReadyUrl)
+		envoyEndPointData.readyReqLocalRelay, _ = client.CreateStandardAgentHttpRequest(http.MethodGet, readyUrlForLocalRelay, nil)
+	}
 
 	envoyEndPointData.agentStartTime = agentStartTime
 	healthStatus.EnvoyReadinessState = NOT_INITIALIZED

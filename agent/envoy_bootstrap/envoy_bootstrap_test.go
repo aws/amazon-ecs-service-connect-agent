@@ -673,7 +673,7 @@ metadata:
     envoy.features.enable_all_deprecated_features: true
     envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
     envoy.reloadable_features.no_extension_lookup_by_name: true
-    envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
+    envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: true
     re2.max_program_size.error_level: 1000
 `)
 }
@@ -686,7 +686,7 @@ func TestBuildNodeMetadata_StaticRuntimeMappingDefaultOverridden(t *testing.T) {
 	defer os.Unsetenv("ENVOY_NO_EXTENSION_LOOKUP_BY_NAME")
 	os.Setenv("MAX_REQUESTS_PER_IO_CYCLE", "1")
 	defer os.Unsetenv("MAX_REQUESTS_PER_IO_CYCLE")
-	os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", "true")
+	os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", "false")
 	defer os.Unsetenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
 	metadata, err := buildMetadataForNode()
 	assert.Nil(t, err)
@@ -699,7 +699,7 @@ metadata:
     envoy.features.enable_all_deprecated_features: true
     envoy.reloadable_features.http_set_tracing_decision_in_request_id: false
     envoy.reloadable_features.no_extension_lookup_by_name: false
-    envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: true
+    envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
     re2.max_program_size.error_level: 1000
     http.max_requests_per_io_cycle: 1
 `)
@@ -718,7 +718,7 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
+      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: true
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -740,7 +740,7 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: false
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
+      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: true
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -762,7 +762,7 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: false
-      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
+      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: true
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -784,7 +784,7 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
+      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: true
       re2.max_program_size.error_level: 1000
       http.max_requests_per_io_cycle: 1
   - name: "admin_layer"
@@ -807,16 +807,16 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
+      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: true
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
 `)
 }
 
-func TestBuildLayeredRuntime_UseHttpClientToFetchAwsCredentials(t *testing.T) {
+func TestBuildLayeredRuntime_DoNotUseHttpClientToFetchAwsCredentials(t *testing.T) {
 	setup()
-	os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", "true")
+	os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", "false")
 	defer os.Unsetenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
 	rt, err := buildLayeredRuntime()
 	if err != nil {
@@ -829,7 +829,7 @@ layers:
       envoy.features.enable_all_deprecated_features: true
       envoy.reloadable_features.http_set_tracing_decision_in_request_id: true
       envoy.reloadable_features.no_extension_lookup_by_name: true
-      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: true
+      envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: false
       re2.max_program_size.error_level: 1000
   - name: "admin_layer"
     adminLayer: {}
@@ -2891,6 +2891,37 @@ func TestCreateBootstrapYamlFileForRelayEndpoint(t *testing.T) {
 	assert.NotEqual(t, statInfo.Size(), 0)
 }
 
+func TestCreateBootstrapYamlFileForLocalRelayEndpoint(t *testing.T) {
+	setup()
+	os.Setenv("AWS_REGION", "us-west-2")
+	os.Setenv("APPMESH_RESOURCE_ARN", "mesh/foo/virtualNode/bar")
+	defer os.Unsetenv("AWS_REGION")
+	defer os.Unsetenv("APPMESH_RESOURCE_ARN")
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	CheckToEnableLocalRelayModeForXds(&agentConfig)
+	CreateBootstrapYamlFile(agentConfig)
+	assert.True(t, agentConfig.EnableLocalRelayModeForXds)
+	statInfo, err := os.Lstat(agentConfig.LocalRelayEnvoyConfigPath)
+	assert.Nil(t, err)
+	assert.NotEqual(t, statInfo.Size(), 0)
+}
+
+func TestNoCreateBootstrapYamlFileForLocalRelayEndpointInSC(t *testing.T) {
+	setup()
+	os.Setenv("AWS_REGION", "us-west-2")
+	os.Setenv("APPMESH_RESOURCE_ARN", "1234567890:task-set/cluster-name/ecs-svc/deployment-id")
+	defer os.Unsetenv("AWS_REGION")
+	defer os.Unsetenv("APPMESH_RESOURCE_ARN")
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	CheckToEnableLocalRelayModeForXds(&agentConfig)
+	CreateBootstrapYamlFile(agentConfig)
+	_, err := os.Lstat(agentConfig.LocalRelayEnvoyConfigPath)
+	assert.NotNil(t, err)
+	assert.False(t, agentConfig.EnableLocalRelayModeForXds)
+}
+
 func TestRelayBootstrap_NullConfigFile(t *testing.T) {
 	setup()
 	os.Setenv("AWS_REGION", "us-west-2")
@@ -2903,7 +2934,7 @@ func TestRelayBootstrap_NullConfigFile(t *testing.T) {
 	agentConfig.SetDefaults()
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
 	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
-	b, err := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
+	b, err := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -2922,7 +2953,7 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariables(t *testing.T) {
 	agentConfig.SetDefaults()
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
 	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
-	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
+	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI, false)
 	assert.Nil(t, e)
 
 	_, a_exists := os.LookupEnv("APPNET_RELAY_LISTENER_UDS_PATH")
@@ -2945,6 +2976,10 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariables(t *testing.T) {
 
 	_, g_exists := os.LookupEnv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
 	assert.True(t, g_exists)
+
+	serviceName, h_exists := os.LookupEnv("SERVICE_NAME")
+	assert.True(t, h_exists)
+	assert.Equal(t, serviceName, "appmesh")
 }
 
 func TestRelayBootstrap_DefaultValuesSetForEnvVariableFips(t *testing.T) {
@@ -2959,7 +2994,7 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariableFips(t *testing.T) {
 	agentConfig.SetDefaults()
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
 	mockEnvoyCLI := newMockEnvoyCLI("AWS-LC-FIPS", nil)
-	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
+	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI, false)
 	assert.Nil(t, e)
 
 	_, a_exists := os.LookupEnv("APPNET_RELAY_LISTENER_UDS_PATH")
@@ -2983,6 +3018,10 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariableFips(t *testing.T) {
 
 	_, g_exists := os.LookupEnv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
 	assert.True(t, g_exists)
+
+	serviceName, h_exists := os.LookupEnv("SERVICE_NAME")
+	assert.True(t, h_exists)
+	assert.Equal(t, serviceName, "appmesh")
 }
 
 func TestRelayBootstrap_DefaultValuesSetForEnvVariablesInGovCloud(t *testing.T) {
@@ -2997,7 +3036,7 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariablesInGovCloud(t *testing.T) 
 	agentConfig.SetDefaults()
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
 	mockEnvoyCLI := newMockEnvoyCLI("AWS-LC-FIPS", nil)
-	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
+	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI, false)
 	assert.Nil(t, e)
 
 	_, a_exists := os.LookupEnv("APPNET_RELAY_LISTENER_UDS_PATH")
@@ -3021,6 +3060,10 @@ func TestRelayBootstrap_DefaultValuesSetForEnvVariablesInGovCloud(t *testing.T) 
 
 	_, g_exists := os.LookupEnv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
 	assert.True(t, g_exists)
+
+	serviceName, h_exists := os.LookupEnv("SERVICE_NAME")
+	assert.True(t, h_exists)
+	assert.Equal(t, serviceName, "appmesh")
 }
 
 func TestRelayBootstrap_NotFipsCompatibleInGovCloud(t *testing.T) {
@@ -3035,7 +3078,7 @@ func TestRelayBootstrap_NotFipsCompatibleInGovCloud(t *testing.T) {
 	agentConfig.SetDefaults()
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
 	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
-	v, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
+	v, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI, false)
 	assertError(t, v, e)
 }
 
@@ -3051,6 +3094,144 @@ func TestRelayBootstrap_NotFipsCompatibleInIsoCloud(t *testing.T) {
 	agentConfig.SetDefaults()
 	mockFileUtil := newMockFileUtil([]byte{}, nil)
 	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
-	v, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
+	v, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI, false)
 	assertError(t, v, e)
+}
+
+func TestLocalRelayBootstrap_NullConfigFile(t *testing.T) {
+	setup()
+	os.Setenv("AWS_REGION", "us-west-2")
+	os.Setenv("APPMESH_RESOURCE_ARN", "mesh/foo/virtualNode/bar")
+	defer os.Unsetenv("AWS_REGION")
+	defer os.Unsetenv("APPMESH_RESOURCE_ARN")
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	mockFileUtil := newMockFileUtil([]byte{}, nil)
+	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
+	b, err := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI, true)
+	if err != nil {
+		t.Error(err)
+	}
+	assert.Equal(t, b, []byte{})
+}
+
+func TestLocalRelayBootstrap_DefaultValuesSetForEnvVariables(t *testing.T) {
+	setup()
+	os.Setenv("AWS_REGION", "us-west-2")
+	os.Setenv("APPMESH_RESOURCE_ARN", "mesh/foo/virtualNode/bar")
+	defer os.Unsetenv("AWS_REGION")
+	defer os.Unsetenv("APPMESH_RESOURCE_ARN")
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	mockFileUtil := newMockFileUtil([]byte{}, nil)
+	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
+	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI, true)
+	assert.Nil(t, e)
+
+	_, a_exists := os.LookupEnv("APPNET_LOCAL_RELAY_LISTENER_PORT")
+	assert.True(t, a_exists)
+
+	_, b_exists := os.LookupEnv("APPNET_LOCAL_RELAY_ADMIN_PORT")
+	assert.True(t, b_exists)
+
+	_, c_exists := os.LookupEnv("APPNET_LOCAL_RELAY_ADMIN_HOST")
+	assert.True(t, c_exists)
+
+	_, d_exists := os.LookupEnv("AWS_REGION")
+	assert.True(t, d_exists)
+
+	_, e_exists := os.LookupEnv("APPNET_MANAGEMENT_DOMAIN_NAME")
+	assert.True(t, e_exists)
+
+	_, f_exists := os.LookupEnv("APPNET_MANAGEMENT_PORT")
+	assert.True(t, f_exists)
+
+	_, g_exists := os.LookupEnv("RELAY_STREAM_IDLE_TIMEOUT")
+	assert.True(t, g_exists)
+
+	_, h_exists := os.LookupEnv("RELAY_BUFFER_LIMIT_BYTES")
+	assert.True(t, h_exists)
+
+	_, i_exists := os.LookupEnv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
+	assert.True(t, i_exists)
+
+	serviceName, i_exists := os.LookupEnv("SERVICE_NAME")
+	assert.True(t, i_exists)
+	assert.Equal(t, serviceName, "appmesh")
+}
+
+func TestLocalRelayBootstrap_DefaultValuesSetForEnvVariableFips(t *testing.T) {
+	setup()
+	os.Setenv("AWS_REGION", "us-west-2")
+	os.Setenv("APPMESH_RESOURCE_ARN", "mesh/foo/virtualNode/bar")
+	defer os.Unsetenv("AWS_REGION")
+	defer os.Unsetenv("APPMESH_RESOURCE_ARN")
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	mockFileUtil := newMockFileUtil([]byte{}, nil)
+	mockEnvoyCLI := newMockEnvoyCLI("AWS-LC-FIPS", nil)
+	_, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI, true)
+	assert.Nil(t, e)
+
+	_, a_exists := os.LookupEnv("APPNET_LOCAL_RELAY_LISTENER_PORT")
+	assert.True(t, a_exists)
+
+	_, b_exists := os.LookupEnv("APPNET_LOCAL_RELAY_ADMIN_PORT")
+	assert.True(t, b_exists)
+
+	_, c_exists := os.LookupEnv("APPNET_LOCAL_RELAY_ADMIN_HOST")
+	assert.True(t, c_exists)
+
+	_, d_exists := os.LookupEnv("AWS_REGION")
+	assert.True(t, d_exists)
+
+	xDS_domain, e_exists := os.LookupEnv("APPNET_MANAGEMENT_DOMAIN_NAME")
+	assert.True(t, e_exists)
+	assert.True(t, strings.Contains(strings.ToLower(xDS_domain), "fips"))
+
+	_, f_exists := os.LookupEnv("APPNET_MANAGEMENT_PORT")
+	assert.True(t, f_exists)
+
+	_, g_exists := os.LookupEnv("RELAY_STREAM_IDLE_TIMEOUT")
+	assert.True(t, g_exists)
+
+	_, h_exists := os.LookupEnv("RELAY_BUFFER_LIMIT_BYTES")
+	assert.True(t, h_exists)
+
+	_, i_exists := os.LookupEnv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
+	assert.True(t, i_exists)
+
+	serviceName, j_exists := os.LookupEnv("SERVICE_NAME")
+	assert.True(t, j_exists)
+	assert.Equal(t, serviceName, "appmesh")
+}
+
+func TestAppendDogStatsDSinksForLocalRelayEnvoy(t *testing.T) {
+	setup()
+	os.Setenv("ENABLE_ENVOY_DOG_STATSD", "1")
+	defer os.Unsetenv("ENABLE_ENVOY_DOG_STATSD")
+	data := []byte(`
+staticResources:
+  clusters:
+    - a: value
+`)
+	mockFileUtil := newMockFileUtil(data, nil)
+	err := appendDogStatsDSinksForLocalRelay("/dev/stdout", mockFileUtil)
+	assert.Nil(t, err)
+	b, err := mockFileUtil.Read("")
+	assert.Nil(t, err)
+	compareYaml(t, b, []byte(`
+staticResources:
+  clusters:
+    - a: value
+statsSinks:
+- name: envoy.stat_sinks.dog_statsd
+  typedConfig:
+    '@type': type.googleapis.com/envoy.config.metrics.v3.DogStatsdSink
+    address:
+      socketAddress:
+        address: 127.0.0.1
+        portValue: 8125
+        protocol: UDP
+`))
 }

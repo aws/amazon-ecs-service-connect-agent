@@ -15,9 +15,9 @@ static_resources:
   listeners:
     - name: ingress_listener_xds_relay
       address:
-        pipe:
-          path: $APPNET_RELAY_LISTENER_UDS_PATH
-          mode: 384 # decimal form of file permission 0600 (octal)
+        socketAddress:
+          address: 127.0.0.1
+          portValue: $APPNET_LOCAL_RELAY_LISTENER_PORT
       per_connection_buffer_limit_bytes: $RELAY_BUFFER_LIMIT_BYTES
       default_filter_chain:
         filters:
@@ -65,6 +65,12 @@ static_resources:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
           explicit_http_config:
             http2_protocol_options: {}
+      upstream_connection_options:
+        # Default idle timeout in NLB is 350s and in ALB is 60s. So picking a value less than 60s.
+        # https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/core/v3/address.proto#envoy-v3-api-msg-config-core-v3-tcpkeepalive
+        tcp_keepalive:
+          keepalive_time: 45 # The number of seconds a connection needs to be idle before keep-alive probes start being sent.
+          keepalive_interval: 45 # The number of seconds between keep-alive probes.
       lb_policy: round_robin
       per_connection_buffer_limit_bytes: $RELAY_BUFFER_LIMIT_BYTES
       load_assignment:
@@ -72,6 +78,12 @@ static_resources:
         endpoints:
           - lb_endpoints:
               endpoint: { address: { socket_address: { address: $APPNET_MANAGEMENT_DOMAIN_NAME, port_value: $APPNET_MANAGEMENT_PORT }}}
+      health_checks:
+        - timeout: 3s
+          interval: 10s
+          unhealthy_threshold: 3
+          healthy_threshold: 2
+          tcp_health_check: {}
       transport_socket:
         name: transport_sockets.tls
         typed_config:
@@ -80,17 +92,16 @@ static_resources:
             validation_context:
               trusted_ca:
                 filename: /etc/pki/tls/cert.pem
-
 admin:
   address:
-    pipe:
-      path: /tmp/envoy_admin.sock
-      mode: 384 # decimal form of file permission 0600 (octal)
+    socketAddress:
+      address: $APPNET_LOCAL_RELAY_ADMIN_HOST
+      portValue: $APPNET_LOCAL_RELAY_ADMIN_PORT
 layered_runtime:
   layers:
     - name: "static_layer_0"
       staticLayer:
-        envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: $ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS
         re2.max_program_size.error_level: 1000
+        envoy.reloadable_features.use_http_client_to_fetch_aws_credentials: $ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS
     - name: "admin_layer"
       adminLayer: {}

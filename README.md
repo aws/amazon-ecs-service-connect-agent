@@ -146,7 +146,7 @@ These environment variables offer controls to alter Amazon ECS Service Connect A
 
 **Agent Relay Mode Operation Environment Variables**
 
-These environment variables offer controls to alter the agent functionality when running in the Relay mode. The relay runs one per container instance and proxies xDS connections/requests from all the Amazon ECS Service Connect Agent containers running on the host to the control plane management server. It uses a static bootstrap config file stored in the `agent/resources/bootstrap_configs` directory.
+These environment variables offer controls to alter the agent functionality when running in the Relay mode. The relay runs one per container instance and proxies xDS connections/requests from all the Amazon ECS Service Connect Agent containers running on the host to the control plane management server. It uses a static bootstrap config file stored in `agent/resources/bootstrap_configs/relay_bootstrap.yaml` file.
 
 |Environment Key	|Example Value(s)	|Description	|Default Value	|
 |---	|---	|---	|---	|
@@ -156,6 +156,21 @@ These environment variables offer controls to alter the agent functionality when
 |`APPNET_RELAY_LISTENER_UDS_PATH` |/path/to/socket |Specify unix domain socket path for xDS Relay listener to serve control plane requests from the Amazon ECS Service Connect Agent. | `/tmp/relay_xds.sock` |
 |`RELAY_STREAM_IDLE_TIMEOUT`  | 2000s | Timeout value for connection between the agent in relay mode and the management server. | 2400s |
 |`RELAY_BUFFER_LIMIT_BYTES`  | 10485760 | Allows for configurable connection buffer limit for agent in relay mode. | 10485760 |
+
+
+**Agent Local Relay Mode Operation Environment Variables**
+
+These environment variables offer controls to alter the agent functionality when running in the Local Relay mode. The local relay envoy runs as a separate process inside the container and proxies xDS connections/requests from the AppMesh Envoy container to the control plane management server. It uses a static bootstrap config file stored in `agent/resources/bootstrap_configs/local_relay_bootstrap.yaml` file. Note that the local relay mode is only enabled for AppMesh mode and not enabled for Amazon ECS Service Connect mode.
+
+
+|Environment Key	|Example Value(s)	|Description	|Default Value	|
+|---	|---	|---	|---	|
+|`APPNET_LOCAL_RELAY_LISTENER_PORT` |1234 |Specify the port on which the local relay Envoy will be listening to serve the xDS requests coming from Envoy process. |15003   |
+|`APPNET_LOCAL_RELAY_ADMIN_PORT` |9905 | Specify the port on which the local relay Envoy admin access is reachable. Make sure this value if set doesn't conflict with the `ENVOY_ADMIN_ACCESS_PORT` |9903  |
+|`APPNET_LOCAL_RELAY_ADMIN_HOST` |0.0.0.0 | Specify an IP address to override the default local relay Envoy management interface address. By default this admin interface will not be exposed outside the container. If you want to access this interface outside the container then set this value to `0.0.0.0` and make sure you don't allow free or public access to this endpoint |127.0.0.1  |
+|`APPNET_LOCAL_RELAY_LOG_DESTINATION` |/dev |Location of local relay Envoy debug log folder. If you want the logs to be printed to stdour/stderr then set this value to `/dev`. If this variable is not set or is set to an empty string, the default logs will be stored inside `/tmp` folder. | `/tmp` |
+|`APPNET_LOCAL_RELAY_LOG_FILE_NAME`  | stdout/stderr | Location of local relay Envoy debug log file. If you want the logs to be printed to stdour/stderr then set this value to `stdout` or `stderr`.| `local_relay_appnet_envoy.log` |
+
 
 **Management Server Operating Environment Variables**
 

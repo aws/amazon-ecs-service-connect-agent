@@ -77,6 +77,77 @@ func TestBuildCommandArgsNoEnvoyParameters(t *testing.T) {
 	assert.ElementsMatch(t, []string{agentConfig.CommandPath}, arguments)
 }
 
+func TestBuildCommandArgsWhenLocalRelayModeIsEnabled(t *testing.T) {
+	var agentConfig config.AgentConfig
+
+	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
+
+	arguments := buildCommandArgs(agentConfig)
+
+	assert.Equal(t, len(arguments), 9)
+	assert.ElementsMatch(t, []string{
+		agentConfig.CommandPath,
+		"-c",
+		agentConfig.EnvoyConfigPath,
+		"-l",
+		agentConfig.EnvoyLogLevel,
+		"--drain-time-s",
+		strconv.Itoa(int(agentConfig.ListenerDrainWaitTime / time.Second)),
+		"--use-dynamic-base-id",
+		"--disable-hot-restart",
+	}, arguments)
+}
+
+func TestBuildCommandArgsForLocalRelayEnvoy(t *testing.T) {
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
+	agentConfig.LocalRelayEnvoyConfigPath = "/tmp/local"
+	arguments := buildLocalRelayCommandArgs(agentConfig)
+	assert.Equal(t, len(arguments), 11)
+	assert.ElementsMatch(t, []string{
+		agentConfig.CommandPath,
+		"-c",
+		agentConfig.LocalRelayEnvoyConfigPath,
+		"-l",
+		agentConfig.EnvoyLogLevel,
+		"--concurrency",
+		config.ENVOY_CONCURRENCY_FOR_RELAY_DEFAULT,
+		"--use-dynamic-base-id",
+		"--log-path",
+		"/tmp/local_relay_appnet_envoy.log",
+		"--disable-hot-restart",
+	}, arguments)
+}
+
+func TestBuildCommandArgsForLocalRelayEnvoy_LogDestinationStdOut(t *testing.T) {
+	os.Setenv("APPNET_LOCAL_RELAY_LOG_DESTINATION", "/dev")
+	os.Setenv("APPNET_LOCAL_RELAY_LOG_FILE_NAME", "stdout")
+	defer os.Unsetenv("APPNET_LOCAL_RELAY_LOG_FILE_NAME")
+	defer os.Unsetenv("APPNET_LOCAL_RELAY_LOG_DESTINATION")
+
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
+	agentConfig.LocalRelayEnvoyConfigPath = "/tmp/local"
+	arguments := buildLocalRelayCommandArgs(agentConfig)
+	assert.Equal(t, len(arguments), 11)
+	assert.ElementsMatch(t, []string{
+		agentConfig.CommandPath,
+		"-c",
+		agentConfig.LocalRelayEnvoyConfigPath,
+		"-l",
+		agentConfig.EnvoyLogLevel,
+		"--concurrency",
+		config.ENVOY_CONCURRENCY_FOR_RELAY_DEFAULT,
+		"--use-dynamic-base-id",
+		"--log-path",
+		"/dev/stdout",
+		"--disable-hot-restart",
+	}, arguments)
+}
+
 func TestStartCommand(t *testing.T) {
 	var agentConfig config.AgentConfig
 
@@ -89,6 +160,7 @@ func TestStartCommand(t *testing.T) {
 	// Set the drain time to zero so that we do not append the --drain-time-s parameter
 	// in buildCommandArgs
 	agentConfig.ListenerDrainWaitTime = 0
+	agentConfig.DisableHotRestart = false
 
 	logging.SetupLogger(&agentConfig)
 	args := buildCommandArgs(agentConfig)
@@ -453,6 +525,7 @@ func skip_TestLogRotation(t *testing.T) {
 	agentConfig.EnvoyLogLevel = ""
 	agentConfig.EnvoyRestartCount = 2
 	agentConfig.ListenerDrainWaitTime = 0
+	agentConfig.DisableHotRestart = false
 
 	// Sadly this syntax does not work on macOS.  Defaulting to the
 	// linux syntax of top since this macOS is not the target platform
