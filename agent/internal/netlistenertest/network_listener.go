@@ -108,3 +108,11 @@ func (ctx *ListenContext) CreateEnvoyAdminListener(agentConfig *config.AgentConf
 	}
 	return nil
 }
+
+func (ctx *ListenContext) CreateLocalRelayEnvoyAdminListener(agentConfig *config.AgentConfig) error {
+	if err := ctx.GetPortListener(); err != nil {
+		return err
+	}
+	agentConfig.LocalRelayEnvoyAdminPort = ctx.Port
+	return nil
+}

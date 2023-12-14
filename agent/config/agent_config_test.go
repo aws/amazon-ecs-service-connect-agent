@@ -39,19 +39,32 @@ func TestPopulateDefaultAgentConfig(t *testing.T) {
 	assert.Equal(t, HC_POLL_INTERVAL_MS_DEFAULT*time.Millisecond, agentConfig.HcPollInterval)
 	assert.Equal(t, LISTENER_DRAIN_WAIT_TIME_SEC_DEFAULT*time.Second, agentConfig.ListenerDrainWaitTime)
 	assert.Equal(t, (LISTENER_DRAIN_WAIT_TIME_SEC_DEFAULT+PID_STOP_DELAY_SEC)*time.Second, agentConfig.StopProcessWaitTime)
+	assert.Equal(t, APPNET_LOCAL_RELAY_LISTENER_PORT_DEFAULT, agentConfig.LocalRelayEnvoyListenerPort)
+	assert.Equal(t, APPNET_LOCAL_RELAY_ADMIN_PORT_DEFAULT, agentConfig.LocalRelayEnvoyAdminPort)
+	assert.Equal(t, APPNET_LOCAL_RELAY_ADMIN_HOST_DEFAULT, agentConfig.LocalRelayEnvoyAdminHost)
+	assert.Equal(t, APPNET_LOCAL_RELAY_LOG_DESTINATION_DEFAULT, agentConfig.LocalRelayEnvoyLoggingDestination)
+	assert.False(t, agentConfig.EnableLocalRelayModeForXds)
 	assert.Empty(t, agentConfig.EnvoyLoggingDestination)
 	assert.Equal(t, "info", agentConfig.EnvoyLogLevel)
 	assert.NotEmpty(t, agentConfig.EnvoyConfigPath)
 	assert.True(t, strings.HasSuffix(agentConfig.EnvoyConfigPath, ".yaml"))
 	assert.Empty(t, agentConfig.ClusterIPMapping)
-	assert.False(t, agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
+	assert.True(t, agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
 }
 
 func TestPopulateAgentConfigWithEnvVars(t *testing.T) {
 	os.Setenv("APPNET_AGENT_HTTP_PORT", "8888")
 	os.Setenv("APPNET_AGENT_HTTP_BIND_ADDRESS", "127.0.0.2")
+	os.Setenv("APPNET_LOCAL_RELAY_LISTENER_PORT", "15004")
+	os.Setenv("APPNET_LOCAL_RELAY_ADMIN_PORT", "9004")
+	os.Setenv("APPNET_LOCAL_RELAY_ADMIN_HOST", "0.0.0.0")
+	os.Setenv("APPNET_LOCAL_RELAY_LOG_DESTINATION", "/var/log")
 	defer os.Unsetenv("APPNET_AGENT_HTTP_PORT")
 	defer os.Unsetenv("APPNET_AGENT_HTTP_BIND_ADDRESS")
+	defer os.Unsetenv("APPNET_LOCAL_RELAY_LISTENER_PORT")
+	defer os.Unsetenv("APPNET_LOCAL_RELAY_ADMIN_PORT")
+	defer os.Unsetenv("APPNET_LOCAL_RELAY_ADMIN_HOST")
+	defer os.Unsetenv("APPNET_LOCAL_RELAY_LOG_DESTINATION")
 
 	var agentConfig AgentConfig
 
@@ -60,6 +73,10 @@ func TestPopulateAgentConfigWithEnvVars(t *testing.T) {
 	assert.NotNil(t, agentConfig)
 	assert.Equal(t, 8888, agentConfig.AgentHttpPort)
 	assert.Equal(t, "127.0.0.2", agentConfig.AgentHttpAddress)
+	assert.Equal(t, 15004, agentConfig.LocalRelayEnvoyListenerPort)
+	assert.Equal(t, 9004, agentConfig.LocalRelayEnvoyAdminPort)
+	assert.Equal(t, "0.0.0.0", agentConfig.LocalRelayEnvoyAdminHost)
+	assert.Equal(t, "/var/log", agentConfig.LocalRelayEnvoyLoggingDestination)
 }
 
 func TestInvalidLogLevel(t *testing.T) {
@@ -97,14 +114,14 @@ func TestEnvoyAdminModeUds(t *testing.T) {
 }
 
 func TestEnvoyOverrideUseHttpClient(t *testing.T) {
-	os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", "true")
+	os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", "false")
 	defer os.Unsetenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS")
 	var agentConfig AgentConfig
 
 	agentConfig.SetDefaults()
 
 	assert.NotNil(t, agentConfig)
-	assert.True(t, agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
+	assert.False(t, agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
 }
 
 func TestEnableRelayModeForXds(t *testing.T) {
@@ -124,7 +141,7 @@ func TestEnableRelayModeForXds(t *testing.T) {
 	assert.Equal(t, 443, agentConfig.AppNetManagementPort)
 	assert.Equal(t, "2400s", agentConfig.RelayStreamIdleTimeout)
 	assert.Equal(t, 10485760, agentConfig.RelayBufferLimitBytes)
-	assert.False(t, agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
+	assert.True(t, agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
 }
 
 func TestEnableRelayModeForXds_domainWithScheme(t *testing.T) {
@@ -282,4 +299,26 @@ func TestGetHcPollInterval(t *testing.T) {
 	os.Setenv("APPNET_AGENT_POLL_ENVOY_READINESS_INTERVAL_S", "5")
 	agentConfig.SetDefaults()
 	assert.Equal(t, 2001*time.Millisecond, agentConfig.HcPollInterval)
+}
+
+func TestLocalRelayDefault(t *testing.T) {
+	var agentConfig AgentConfig
+	agentConfig.SetLocalRelayDefaults()
+	assert.Equal(t, 1, agentConfig.LocalRelayEnvoyConcurrency)
+	assert.Equal(t, "2400s", agentConfig.RelayStreamIdleTimeout)
+	assert.Equal(t, 10485760, agentConfig.RelayBufferLimitBytes)
+}
+
+func TestLocalRelayDefaultOverridden(t *testing.T) {
+	os.Setenv("RELAY_STREAM_IDLE_TIMEOUT", "300s")
+	os.Setenv("RELAY_BUFFER_LIMIT_BYTES", "32768")
+
+	defer os.Unsetenv("RELAY_STREAM_IDLE_TIMEOUT")
+	defer os.Unsetenv("RELAY_BUFFER_LIMIT_BYTES")
+
+	var agentConfig AgentConfig
+	agentConfig.SetLocalRelayDefaults()
+	assert.Equal(t, 1, agentConfig.LocalRelayEnvoyConcurrency)
+	assert.Equal(t, "300s", agentConfig.RelayStreamIdleTimeout)
+	assert.Equal(t, 32768, agentConfig.RelayBufferLimitBytes)
 }

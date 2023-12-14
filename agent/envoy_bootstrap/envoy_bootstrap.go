@@ -80,6 +80,7 @@ const (
 	listenerProtocolRegex       = ".*?\\.ingress\\.((\\w+?)\\.)[0-9]+?\\.(.+?)$"
 	listenerPortRegex           = ".*?\\.ingress\\.\\w+?\\.(([0-9]+?)\\.)(.+?)$"
 	envoyRdsRouteConf           = ".*?\\.ingress\\.\\w+?\\.[0-9]+?\\.rds\\.((.*?)\\.)(.+?)$"
+	serviceConnectNodeIdPattern = ":task-set/.*?/ecs-svc/"
 )
 
 type EnvoyCLI interface {
@@ -1205,6 +1206,36 @@ func appendDogStatsDSinks(b *boot.Bootstrap) error {
 	return mergeBootstrap(b, bt)
 }
 
+func appendDogStatsDSinksForLocalRelay(envoyConfigPath string, fileUtil FileUtil) error {
+	// Stats Sinks
+	if enableDogStatsd, _ := env.Truthy("ENABLE_ENVOY_DOG_STATSD"); enableDogStatsd {
+		log.Infof("ENABLE_ENVOY_DOG_STATSD is set so appending it to local relay envoy bootstrap config file %s", envoyConfigPath)
+		b := &boot.Bootstrap{}
+		if err := appendDogStatsDSinks(b); err != nil {
+			return err
+		}
+		if j, err := protojson.Marshal(b); err != nil {
+			log.Errorf("Cannot serialize bootstrap config for stats. %v", err)
+		} else if statsConfigYaml, err := yaml.JSONToYAML(j); err != nil {
+			log.Errorf("Cannot convert bootstrap config for stats to yaml. %v", err)
+			return err
+		} else {
+			// Read the file to append the remaining contents
+			envoyConfigContents, err := fileUtil.Read(envoyConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to read local relay envoy bootstrap file at %s, %s", envoyConfigPath, err)
+			}
+			// Append stats data to the existing config
+			updatedEnvoyConfigContents := append(envoyConfigContents, statsConfigYaml...)
+			// Write updated contents back to the file
+			if err = fileUtil.Write(envoyConfigPath, updatedEnvoyConfigContents, 0644); err != nil {
+				return fmt.Errorf("failed to write stats config to local relay envoy bootstrap file at %s, %s", envoyConfigPath, err)
+			}
+		}
+	}
+	return nil
+}
+
 func mergeStaticResourcesMaps(dst, src map[string]interface{}) (map[string]interface{}, error) {
 	if _, ok := src[staticResourcesKey].(map[string]interface{}); !ok {
 		// Just return dst if src is empty and there is nothing to merge
@@ -1454,7 +1485,13 @@ func bootstrap(agentConfig config.AgentConfig, fileUtil FileUtil, envoyCLIInst E
 		if err != nil {
 			return nil, err
 		}
+	} else if agentConfig.EnableLocalRelayModeForXds {
+		dr, err = buildDynamicResourcesForRelayEndpoint(fmt.Sprintf("%s:%d", agentConfig.EnvoyServerHostName, agentConfig.LocalRelayEnvoyListenerPort))
+		if err != nil {
+			return nil, err
+		}
 	} else {
+		// Deprecated path with removal of libcurl on Envoy https://github.com/envoyproxy/envoy/pull/30731
 		region, err := getRegion()
 		if err != nil {
 			return nil, err
@@ -1572,6 +1609,21 @@ func validateEnvoyConfigPath(configPath string) error {
 	return nil
 }
 
+func CheckToEnableLocalRelayModeForXds(agentConfig *config.AgentConfig) error {
+	id, err := getNodeId()
+	if err != nil {
+		return err
+	}
+	// To determine if Local Relay Envoy has to be enabled to sign xDS requests.
+	// True if node id doesn't match service connect node ID pattern.
+	agentConfig.EnableLocalRelayModeForXds = !regexp.MustCompile(serviceConnectNodeIdPattern).MatchString(id)
+	if agentConfig.EnableLocalRelayModeForXds {
+		// Create the file to store the static bootstrap configuration.
+		agentConfig.LocalRelayEnvoyConfigPath = config.GetDefaultBootstrapFilePath()
+	}
+	return nil
+}
+
 func CreateBootstrapYamlFile(agentConfig config.AgentConfig) error {
 	statInfo, _ := os.Lstat(agentConfig.EnvoyConfigPath)
 	if statInfo == nil {
@@ -1653,20 +1705,101 @@ func setRelayBootstrapEnvVariables(agentConfig config.AgentConfig, envoyCLIInst 
 		os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", fmt.Sprint(agentConfig.EnvoyUseHttpClientToFetchAwsCredentials))
 	}
 
+	// TODO: Test if any service changes are needed to change to ecs.
+	os.Setenv("SERVICE_NAME", "appmesh")
+
 	return nil
 }
 
-func GetRelayBootstrapYaml(agentConfig config.AgentConfig, fileUtil FileUtil, envoyCLIInst EnvoyCLI) ([]byte, error) {
-	relayBootstrapConfigPath := filepath.Join("agent-resources", "bootstrap_configs", "relay_bootstrap.yaml")
+// Sets default values for environment variables required by local relay bootstrap but aren't defined by user.
+// Also exports those variables so, they can be expanded in the yaml config file.
+func setLocalRelayBootstrapEnvVariables(agentConfig config.AgentConfig, envoyCLIInst EnvoyCLI) error {
+	var region string
+	if _, exists := os.LookupEnv("APPNET_LOCAL_RELAY_LISTENER_PORT"); !exists {
+		log.Infof("APPNET_LOCAL_RELAY_LISTENER_PORT is not set, setting default value as: %d", agentConfig.LocalRelayEnvoyListenerPort)
+		os.Setenv("APPNET_LOCAL_RELAY_LISTENER_PORT", fmt.Sprint(agentConfig.LocalRelayEnvoyListenerPort))
+	}
+	region, err := getRegion()
+	if err != nil {
+		return fmt.Errorf("failed to get region from the environment: %v", err)
+	}
+	if _, exists := os.LookupEnv("AWS_REGION"); !exists {
+		log.Infof("AWS_REGION is not set, setting default value as: %v", region)
+		os.Setenv("AWS_REGION", region)
+	}
+
+	signingName, err := getSigningName()
+	if err != nil {
+		return err
+	} else {
+		log.Infof("setting SERVICE_NAME: %v", signingName)
+		os.Setenv("SERVICE_NAME", signingName)
+	}
+
+	// Get both domain and port
+	xdsEndpoint, err := getRegionalXdsEndpoint(region, envoyCLIInst)
+	if err != nil || xdsEndpoint == nil {
+		return err
+	} else {
+		xdsEndpointSplice := strings.Split(*xdsEndpoint, ":")
+		if len(xdsEndpointSplice) == 2 {
+			log.Infof("setting APPNET_MANAGEMENT_DOMAIN_NAME: %v", xdsEndpointSplice[0])
+			os.Setenv("APPNET_MANAGEMENT_DOMAIN_NAME", xdsEndpointSplice[0])
+			log.Infof("setting APPNET_MANAGEMENT_PORT: %v", xdsEndpointSplice[1])
+			os.Setenv("APPNET_MANAGEMENT_PORT", fmt.Sprint(xdsEndpointSplice[1]))
+		} else {
+			return fmt.Errorf("got invalid format of regional xdsEndpoint: %v", xdsEndpoint)
+		}
+	}
+
+	if _, exists := os.LookupEnv("APPNET_LOCAL_RELAY_ADMIN_PORT"); !exists {
+		log.Infof("APPNET_LOCAL_RELAY_ADMIN_PORT is not set, setting default value as: %v", agentConfig.LocalRelayEnvoyAdminPort)
+		os.Setenv("APPNET_LOCAL_RELAY_ADMIN_PORT", fmt.Sprint(agentConfig.LocalRelayEnvoyAdminPort))
+	}
+
+	if _, exists := os.LookupEnv("APPNET_LOCAL_RELAY_ADMIN_HOST"); !exists {
+		log.Infof("APPNET_LOCAL_RELAY_ADMIN_HOST is not set, setting default value as: %v", agentConfig.LocalRelayEnvoyAdminHost)
+		os.Setenv("APPNET_LOCAL_RELAY_ADMIN_HOST", fmt.Sprint(agentConfig.LocalRelayEnvoyAdminHost))
+	}
+
+	if _, exists := os.LookupEnv("RELAY_STREAM_IDLE_TIMEOUT"); !exists {
+		log.Infof("RELAY_STREAM_IDLE_TIMEOUT is not set, setting default value as: %v", agentConfig.RelayStreamIdleTimeout)
+		os.Setenv("RELAY_STREAM_IDLE_TIMEOUT", fmt.Sprint(agentConfig.RelayStreamIdleTimeout))
+	}
+
+	if _, exists := os.LookupEnv("RELAY_BUFFER_LIMIT_BYTES"); !exists {
+		log.Infof("RELAY_BUFFER_LIMIT_BYTES is not set, setting default value as: %v", agentConfig.RelayBufferLimitBytes)
+		os.Setenv("RELAY_BUFFER_LIMIT_BYTES", fmt.Sprint(agentConfig.RelayBufferLimitBytes))
+	}
+
+	if _, exists := os.LookupEnv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS"); !exists {
+		log.Infof("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS is not set, setting default value as: %v", agentConfig.EnvoyUseHttpClientToFetchAwsCredentials)
+		os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", fmt.Sprint(agentConfig.EnvoyUseHttpClientToFetchAwsCredentials))
+	}
+	return nil
+}
+
+func GetRelayBootstrapYaml(agentConfig config.AgentConfig, fileUtil FileUtil, envoyCLIInst EnvoyCLI, isLocal bool) ([]byte, error) {
+	var relayBootstrapConfigPath string
+	if isLocal {
+		relayBootstrapConfigPath = filepath.Join("agent-resources", "bootstrap_configs", "local_relay_bootstrap.yaml")
+	} else {
+		relayBootstrapConfigPath = filepath.Join("agent-resources", "bootstrap_configs", "relay_bootstrap.yaml")
+	}
 
 	configYaml, err := fileUtil.Read(relayBootstrapConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot read relay bootstrap config file. %v", err)
 	}
 
-	er := setRelayBootstrapEnvVariables(agentConfig, envoyCLIInst)
+	var er error
+	if isLocal {
+		er = setLocalRelayBootstrapEnvVariables(agentConfig, envoyCLIInst)
+	} else {
+		er = setRelayBootstrapEnvVariables(agentConfig, envoyCLIInst)
+	}
 	if er != nil {
-		return nil, fmt.Errorf("Failed to read relay bootstrap environment variables. %v", er)
+		return nil, fmt.Errorf("failed to read relay bootstrap environment variables. %v", er)
 	}
 
 	// Replace ${var} in the config with the environment variable values
@@ -1674,29 +1807,47 @@ func GetRelayBootstrapYaml(agentConfig config.AgentConfig, fileUtil FileUtil, en
 	return configYaml, nil
 }
 
-func CreateRelayBootstrapYamlFile(agentConfig config.AgentConfig) error {
-	statInfo, _ := os.Lstat(agentConfig.EnvoyConfigPath)
+func CreateRelayBootstrapYamlFile(agentConfig config.AgentConfig, isLocal bool) error {
+	// Create a yaml file which is used to bootstrap the local relay agent Envoy
+	// to handle request signing towards the control plane. The local relay agent Envoy process will run alongside
+	// the actual Envoy process that proxies mesh traffic.
+	var envoyConfigPath string
+	if isLocal {
+		envoyConfigPath = agentConfig.LocalRelayEnvoyConfigPath
+	} else {
+		envoyConfigPath = agentConfig.EnvoyConfigPath
+	}
+
+	statInfo, _ := os.Lstat(envoyConfigPath)
 	if statInfo == nil {
-		return fmt.Errorf("Cannot get stat info of relay bootstrap config file %s", agentConfig.EnvoyConfigPath)
+		return fmt.Errorf("cannot get stat info of relay (is local=%v) bootstrap config file %s", isLocal, envoyConfigPath)
 	}
 
 	fileUtilInst := &fileUtil{}
 	envoyCLIInst := &envoyCLI{agentConfig.CommandPath}
-	envoyConfigYaml, err := GetRelayBootstrapYaml(agentConfig, fileUtilInst, envoyCLIInst)
+	envoyConfigYaml, err := GetRelayBootstrapYaml(agentConfig, fileUtilInst, envoyCLIInst, isLocal)
 	if err != nil {
 		return err
 	}
 
 	// If there's already a non-empty file present at this location, we'll delete and recreate it.
-	if err := os.Remove(agentConfig.EnvoyConfigPath); err != nil && !os.IsNotExist(err) {
-		log.Warnf("Failed to remove existing Envoy config file at: [%s]. Overwriting with relay config. %v.", agentConfig.AgentAdminUdsPath, err)
+	if err := os.Remove(envoyConfigPath); err != nil && !os.IsNotExist(err) {
+		log.Warnf("Failed to remove existing Envoy config file at: [%s]. "+
+			"Overwriting with relay config. %v.", agentConfig.AgentAdminUdsPath, err)
 	}
-	er := os.WriteFile(agentConfig.EnvoyConfigPath, envoyConfigYaml, 0644)
+	er := os.WriteFile(envoyConfigPath, envoyConfigYaml, 0644)
 	if er != nil {
-		return fmt.Errorf("Cannot write relay bootstrap config to file. %v", er)
+		return fmt.Errorf("cannot write to relay bootstrap config to file. %v", er)
 	}
-	return nil
 
-	e := validateEnvoyConfigPath(agentConfig.EnvoyConfigPath)
+	// Append stats config if needed for local relay envoy
+	if isLocal {
+		err = appendDogStatsDSinksForLocalRelay(envoyConfigPath, fileUtilInst)
+		if err != nil {
+			return err
+		}
+	}
+
+	e := validateEnvoyConfigPath(envoyConfigPath)
 	return e
 }

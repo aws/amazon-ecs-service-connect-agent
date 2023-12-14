@@ -37,6 +37,7 @@ func TestHealthCheckServerHandler(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                          "HEALTHY",
 		EnvoyState:                            "LIVE",
+		LocalRelayEnvoyState:                  "LIVE",
 		ManagementServerConnectionStatus:      "CONNECTED",
 		ManagementServerDisconnectedTimestamp: &statusSinceTime,
 		EnvoyReadinessState:                   "INITIALIZED",
@@ -58,6 +59,7 @@ func TestHealthCheckServerHandler(t *testing.T) {
 
 	assert.Equal(t, "HEALTHY", gjson.Get(respString, "healthStatus").String())
 	assert.Equal(t, "LIVE", gjson.Get(respString, "envoyState").String())
+	assert.Equal(t, "LIVE", gjson.Get(respString, "localRelayEnvoyState").String())
 	assert.Equal(t, "CONNECTED", gjson.Get(respString, "managementServerConnectionStatus").String())
 	assert.Equal(t, "INITIALIZED", gjson.Get(respString, "envoyReadinessState").String())
 	assert.Equal(t, "UPDATE_SUCCESSFUL", gjson.Get(respString, "initialConfigUpdateStatus").String())
@@ -76,6 +78,9 @@ func TestHealthUpdater(t *testing.T) {
 	var agentConfig config.AgentConfig
 
 	agentConfig.SetDefaults()
+
+	// Enable local relay mode
+	agentConfig.EnableLocalRelayModeForXds = true
 
 	mux := http.NewServeMux()
 	readyResponse := "LIVE"
@@ -104,6 +109,24 @@ func TestHealthUpdater(t *testing.T) {
 	// Attach the new listener to the httptest server
 	srv.Listener = *envoyListenCtx.Listener
 	srv.Start()
+
+	srv2 := httptest.NewUnstartedServer(mux)
+	defer srv2.Close()
+
+	// Create a new listener to listen on Local Relay Envoy Admin Port
+	var localRelayEnvoyListenCtx netlistenertest.ListenContext
+	// Create a new listener to listen on Local Relay Envoy Admin Port
+	err = localRelayEnvoyListenCtx.CreateLocalRelayEnvoyAdminListener(&agentConfig)
+	assert.Nil(t, err)
+	defer localRelayEnvoyListenCtx.Close()
+
+	// Close the httptest listener as it listens on port 80 by default
+	err = srv2.Listener.Close()
+	assert.Nil(t, err)
+
+	// Attach the new listener to the httptest server
+	srv2.Listener = *localRelayEnvoyListenCtx.Listener
+	srv2.Start()
 
 	var messageSources messagesources.MessageSources
 	messageSources.SetupChannels()
@@ -142,7 +165,26 @@ func TestHealthUpdater(t *testing.T) {
 	assert.Equal(t, "3", healthStatus.EnvoyRestartCount)
 	assert.Equal(t, "HEALTHY", healthStatus.HealthStatus)
 	assert.Equal(t, "LIVE", healthStatus.EnvoyState)
+	assert.Equal(t, "LIVE", healthStatus.LocalRelayEnvoyState)
 	assert.Equal(t, "CONNECTED", healthStatus.ManagementServerConnectionStatus)
+}
+
+func TestComputeHealthCheck_LocalRelayEnvoyUnreachable_Unhealthy(t *testing.T) {
+	statusSinceTime := time.Now()
+	healthStatus := HealthStatus{
+		HealthStatus:                          "",
+		EnvoyState:                            "LIVE",
+		LocalRelayEnvoyState:                  "UNREACHABLE",
+		ManagementServerConnectionStatus:      "CONNECTED",
+		ManagementServerDisconnectedTimestamp: &statusSinceTime,
+	}
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
+
+	healthStatus.computeHealthCheck(agentConfig)
+
+	assert.Equal(t, "UNHEALTHY", healthStatus.HealthStatus)
 }
 
 func TestComputeHealthCheck_EnvoyLive_Healthy(t *testing.T) {
@@ -150,11 +192,13 @@ func TestComputeHealthCheck_EnvoyLive_Healthy(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                          "",
 		EnvoyState:                            "LIVE",
+		LocalRelayEnvoyState:                  "LIVE",
 		ManagementServerConnectionStatus:      "CONNECTED",
 		ManagementServerDisconnectedTimestamp: &statusSinceTime,
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
 
 	healthStatus.computeHealthCheck(agentConfig)
 
@@ -166,11 +210,13 @@ func TestComputeHealthCheck_EnvoyUnreachable_UnHealthy(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                          "",
 		EnvoyState:                            "UNREACHABLE",
+		LocalRelayEnvoyState:                  "LIVE",
 		ManagementServerConnectionStatus:      "CONNECTED",
 		ManagementServerDisconnectedTimestamp: &statusSinceTime,
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
 
 	healthStatus.computeHealthCheck(agentConfig)
 
@@ -182,11 +228,13 @@ func TestComputeHealthCheck_EnvoyUnInitialized_UnHealthy(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                          "",
 		EnvoyState:                            "INITIALIZING",
+		LocalRelayEnvoyState:                  "LIVE",
 		ManagementServerConnectionStatus:      "CONNECTED",
 		ManagementServerDisconnectedTimestamp: &statusSinceTime,
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
 
 	healthStatus.computeHealthCheck(agentConfig)
 
@@ -198,11 +246,13 @@ func TestComputeHealthCheck_EnvoyDisconnected_Healthy(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                          "",
 		EnvoyState:                            "LIVE",
+		LocalRelayEnvoyState:                  "LIVE",
 		ManagementServerConnectionStatus:      "NOT_CONNECTED",
 		ManagementServerDisconnectedTimestamp: &statusSinceTime,
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
 
 	healthStatus.computeHealthCheck(agentConfig)
 
@@ -216,11 +266,13 @@ func TestComputeHealthCheck_EnvoyDisconnected_UnHealthy(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                          "",
 		EnvoyState:                            "LIVE",
+		LocalRelayEnvoyState:                  "LIVE",
 		ManagementServerConnectionStatus:      "NOT_CONNECTED",
 		ManagementServerDisconnectedTimestamp: &statusSinceTime,
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
 
 	healthStatus.computeHealthCheck(agentConfig)
 
@@ -234,11 +286,13 @@ func TestComputeHealthCheck_EnvoyDisconnected_RelayMode_Healthy(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                          "",
 		EnvoyState:                            "LIVE",
+		LocalRelayEnvoyState:                  "LIVE",
 		ManagementServerConnectionStatus:      "NOT_CONNECTED",
 		ManagementServerDisconnectedTimestamp: &statusSinceTime,
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
 
 	healthStatus.computeHealthCheck(agentConfig)
 
@@ -250,12 +304,14 @@ func TestComputeHealthCheck_InitialConfigUpdateFailed(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                          "",
 		EnvoyState:                            "LIVE",
+		LocalRelayEnvoyState:                  "LIVE",
 		ManagementServerConnectionStatus:      "CONNECTED",
 		ManagementServerDisconnectedTimestamp: &statusSinceTime,
 		InitialConfigUpdateStatus:             "UPDATE_FAILED",
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
 
 	healthStatus.computeHealthCheck(agentConfig)
 
@@ -267,12 +323,14 @@ func TestComputeHealthCheck_InitialConfigUpdateSuccessful(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                          "",
 		EnvoyState:                            "LIVE",
+		LocalRelayEnvoyState:                  "LIVE",
 		ManagementServerConnectionStatus:      "CONNECTED",
 		ManagementServerDisconnectedTimestamp: &statusSinceTime,
 		InitialConfigUpdateStatus:             "UPDATE_SUCCESSFUL",
 	}
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
+	agentConfig.EnableLocalRelayModeForXds = true
 
 	healthStatus.computeHealthCheck(agentConfig)
 
@@ -284,6 +342,7 @@ func TestComputeEnvoyReadinessState_NoFailedStats(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                     "",
 		EnvoyState:                       "LIVE",
+		LocalRelayEnvoyState:             "LIVE",
 		ManagementServerConnectionStatus: "CONNECTED",
 		EnvoyReadinessState:              "NOT_INITIALIZED",
 	}
@@ -297,6 +356,7 @@ func TestComputeEnvoyReadinessState_ZeroFailedStats(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                     "",
 		EnvoyState:                       "LIVE",
+		LocalRelayEnvoyState:             "LIVE",
 		ManagementServerConnectionStatus: "CONNECTED",
 		EnvoyReadinessState:              "NOT_INITIALIZED",
 	}
@@ -310,6 +370,7 @@ func TestComputeEnvoyReadinessState_FailedStats(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                     "",
 		EnvoyState:                       "LIVE",
+		LocalRelayEnvoyState:             "LIVE",
 		ManagementServerConnectionStatus: "CONNECTED",
 		EnvoyReadinessState:              "NOT_INITIALIZED",
 	}
@@ -323,6 +384,7 @@ func TestComputeEnvoyReadinessState_FailedStats_AfterInitialization(t *testing.T
 	healthStatus := HealthStatus{
 		HealthStatus:                     "",
 		EnvoyState:                       "LIVE",
+		LocalRelayEnvoyState:             "LIVE",
 		ManagementServerConnectionStatus: "CONNECTED",
 		EnvoyReadinessState:              "INITIALIZED",
 		InitialConfigUpdateStatus:        "UPDATE_SUCCESSFUL",
@@ -339,6 +401,7 @@ func TestComputeManagementServerConnectionStatus_EnvoyDisconnected(t *testing.T)
 	healthStatus := HealthStatus{
 		HealthStatus:                     "",
 		EnvoyState:                       "LIVE",
+		LocalRelayEnvoyState:             "LIVE",
 		ManagementServerConnectionStatus: "CONNECTED",
 	}
 
@@ -357,6 +420,7 @@ func TestComputeManagementServerConnectionStatus_EnvoyConnected(t *testing.T) {
 	healthStatus := HealthStatus{
 		HealthStatus:                          "",
 		EnvoyState:                            "LIVE",
+		LocalRelayEnvoyState:                  "LIVE",
 		ManagementServerConnectionStatus:      "NOT_CONNECTED",
 		ManagementServerDisconnectedTimestamp: &statusSinceTime,
 	}

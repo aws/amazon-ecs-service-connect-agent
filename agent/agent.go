@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"strconv"
 	"sync"
 	"syscall"
@@ -71,6 +72,50 @@ func buildCommandArgs(agentConfig config.AgentConfig) []string {
 	if listenerDrainWaitTime > 0 {
 		args = append(args, "--drain-time-s")
 		args = append(args, strconv.Itoa(listenerDrainWaitTime))
+	}
+	if agentConfig.EnableLocalRelayModeForXds {
+		// To allow multiple, distinctly configured Envoys to run on the same host.
+		args = append(args, "--use-dynamic-base-id")
+	}
+
+	if agentConfig.DisableHotRestart {
+		args = append(args, "--disable-hot-restart")
+	}
+
+	if len(agentConfig.CommandArgs) > 0 {
+		args = append(args, agentConfig.CommandArgs...)
+	}
+
+	return args
+}
+
+// Dynamically construct the command arguments we are executing for local relay Envoy
+func buildLocalRelayCommandArgs(agentConfig config.AgentConfig) []string {
+	var args = []string{agentConfig.CommandPath}
+
+	if agentConfig.LocalRelayEnvoyConfigPath != "" {
+		args = append(args, "-c")
+		args = append(args, agentConfig.LocalRelayEnvoyConfigPath)
+	}
+
+	if agentConfig.EnvoyLogLevel != "" {
+		args = append(args, "-l")
+		args = append(args, agentConfig.EnvoyLogLevel)
+	}
+
+	// If condition is just to make the unit test pass
+	if agentConfig.EnableLocalRelayModeForXds {
+		args = append(args, "--concurrency")
+		args = append(args, config.ENVOY_CONCURRENCY_FOR_RELAY_DEFAULT)
+
+		args = append(args, "--use-dynamic-base-id")
+
+		// To log to stdout then set
+		// APPNET_LOCAL_RELAY_LOG_DESTINATION="/dev"
+		// APPNET_LOCAL_RELAY_LOG_FILE_NAME="stdout"
+		args = append(args, "--log-path")
+		logFullPath := path.Join(agentConfig.LocalRelayEnvoyLoggingDestination, agentConfig.LocalRelayEnvoyLogFileName)
+		args = append(args, logFullPath)
 	}
 
 	if agentConfig.DisableHotRestart {
@@ -187,6 +232,16 @@ func setAgentCapabilities() error {
 		}
 	}
 	return nil
+}
+
+func startLocalRelay(agentConfig config.AgentConfig, messageSource *messagesources.MessageSources) {
+	// Build the command line arguments and execute the local relay program
+	cmdArgs := buildLocalRelayCommandArgs(agentConfig)
+	pid, err := startCommand(agentConfig, cmdArgs)
+	if err != nil {
+		log.Errorf("Unable to start local relay process: %v\n", err)
+	}
+	log.Debugf("Started local relay process [%d]\n", pid)
 }
 
 // start the command object, restarting up to the configured limit
@@ -541,10 +596,11 @@ func main() {
 
 	agentConfig.ParseFlags(os.Args)
 	agentConfig.SetDefaults()
+	bootstrap.CheckToEnableLocalRelayModeForXds(&agentConfig)
 
 	// TODO: Move this logic to envoy_bootstrap.go so we can write unit test for it.
 	if agentConfig.EnableRelayModeForXds {
-		err := bootstrap.CreateRelayBootstrapYamlFile(agentConfig)
+		err := bootstrap.CreateRelayBootstrapYamlFile(agentConfig, false /*local relay envoy*/)
 		if err != nil {
 			log.Errorf("Failed to create relay bootstrap configuration yaml file:[%s] %v", agentConfig.EnvoyConfigPath, err)
 			os.Exit(1)
@@ -554,6 +610,14 @@ func main() {
 		if err != nil {
 			log.Errorf("Failed to create bootstrap configuration yaml file:[%s] %v", agentConfig.EnvoyConfigPath, err)
 			os.Exit(1)
+		}
+		if agentConfig.EnableLocalRelayModeForXds {
+			agentConfig.SetLocalRelayDefaults()
+			if err = bootstrap.CreateRelayBootstrapYamlFile(agentConfig, true /*local relay envoy*/); err != nil {
+				log.Errorf("Failed to create local release envoy bootstrap configuration yaml file:[%s] %v",
+					agentConfig.EnvoyConfigPath, err)
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -573,6 +637,11 @@ func main() {
 
 	setupSignalHandling(agentConfig, &messageSources)
 	setupUdsForEnvoyAdmin(agentConfig, &messageSources)
+
+	// Start the configured local relay Envoy binary
+	if agentConfig.EnableLocalRelayModeForXds {
+		startLocalRelay(agentConfig, &messageSources)
+	}
 
 	// Start the configured binary and keep it alive
 	go keepCommandAlive(agentConfig, &messageSources)
