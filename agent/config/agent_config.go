@@ -65,6 +65,7 @@ const (
 	ENVOY_LISTENER_DRAINING_ENDPOINT_URL = "/drain_listeners"
 	ENVOY_CONCURRENCY_DEFAULT            = -1  // we will not set concurrency [envoy --concurrency] by default.
 	ENVOY_CONCURRENCY_FOR_RELAY_DEFAULT  = "1" // For relay we are defaulting it to 1
+	DISABLE_HOT_RESTART_DEFAULT          = true
 
 	// agent relay mode
 	ENABLE_RELAY_MODE_FOR_XDS_DEFAULT      = false
@@ -157,6 +158,7 @@ type AgentConfig struct {
 	ListenerPortMapping             string
 	MaxLogFileSizeMB                float64
 	MaxLogCount                     int
+	DisableHotRestart               bool
 
 	XdsEndpointUdsPath string
 
@@ -499,6 +501,7 @@ func (config *AgentConfig) SetDefaults() {
 	}
 
 	config.EnvoyConcurrency = getEnvValueAsInt("ENVOY_CONCURRENCY", ENVOY_CONCURRENCY_DEFAULT)
+	config.DisableHotRestart = getEnvValueAsBool("DISABLE_HOT_RESTART", DISABLE_HOT_RESTART_DEFAULT)
 
 	validateEnvoyLogLevel(&config.EnvoyLogLevel)
 
