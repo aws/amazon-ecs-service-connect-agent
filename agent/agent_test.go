@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -41,6 +42,11 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
+
+type OpenfilesLimit struct {
+	Soft uint64
+	Hard uint64
+}
 
 func TestBuildCommandArgs(t *testing.T) {
 	var agentConfig config.AgentConfig
@@ -77,7 +83,62 @@ func TestBuildCommandArgsNoEnvoyParameters(t *testing.T) {
 	assert.ElementsMatch(t, []string{agentConfig.CommandPath}, arguments)
 }
 
+func parseUint(s string) (uint64, error) {
+	if s == "unlimited" {
+		return 18446744073709551615, nil
+	}
+	i, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("couldn't parse value %q: %w", s, err)
+	}
+	return i, nil
+}
+
+func getOpenfilesLimit(pid int) (*OpenfilesLimit, error) {
+	limitsFile := fmt.Sprintf("/proc/%d/limits", pid)
+	file, err := os.Open(limitsFile)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var limit = OpenfilesLimit{}
+
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	// skip header
+	scanner.Scan()
+
+	var limitsMatch = regexp.MustCompile(`(Max \w+\s{0,1}?\w*\s{0,1}\w*)\s{2,}(\w+)\s+(\w+)`)
+	for scanner.Scan() {
+		fields := limitsMatch.FindStringSubmatch(scanner.Text())
+		if len(fields) != 4 {
+			return &OpenfilesLimit{}, fmt.Errorf("couldn't parse limits file, line: %s", scanner.Text())
+		}
+
+		switch fields[1] {
+		case "Max open files":
+			limit.Soft, err = parseUint(fields[2])
+			if err != nil {
+				return &OpenfilesLimit{}, err
+			}
+
+			limit.Hard, err = parseUint(fields[3])
+			if err != nil {
+				return &OpenfilesLimit{}, err
+			}
+			return &limit, nil
+		}
+	}
+	return &OpenfilesLimit{}, fmt.Errorf("Max open files limits not found")
+}
+
 func TestStartCommand(t *testing.T) {
+	err := setupOpenfilesLimit()
+	assert.Nil(t, err)
+
 	var agentConfig config.AgentConfig
 
 	agentConfig.SetDefaults()
@@ -96,6 +157,12 @@ func TestStartCommand(t *testing.T) {
 	pid, err := startCommand(agentConfig, args)
 	assert.NotEqual(t, pid, -1)
 	assert.Nil(t, err)
+
+	noFileLimit, err := getOpenfilesLimit(pid)
+	log.Debugf("open files limit soft: %d, hard: %d\n", noFileLimit.Soft, noFileLimit.Hard)
+	assert.Nil(t, err)
+	assert.Equal(t, noFileLimit.Soft, noFileLimit.Hard)
+	assert.GreaterOrEqual(t, noFileLimit.Soft, uint64(65535))
 }
 
 func TestNonBlockingChannelRead(t *testing.T) {
