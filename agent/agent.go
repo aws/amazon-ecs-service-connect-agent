@@ -157,6 +157,25 @@ func startCommand(agentConfig config.AgentConfig, cmdArgs []string) (int, error)
 	return pid, err
 }
 
+func setupOpenfilesLimit() error {
+	var rlimit syscall.Rlimit
+	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rlimit)
+	if err != nil {
+		log.Errorf("Failed to get resource limits: %v", err)
+		return err
+	}
+
+	// Set the current resource limits to the hard limit
+	// Any forked process will inherit this value
+	rlimit.Cur = rlimit.Max
+	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rlimit)
+	if err != nil {
+		log.Errorf("Failed to set resource limits: %v", err)
+		return err
+	}
+	return nil
+}
+
 // When AppNet agent is run as a non-root user, linux capabilities are not preserved on the Envoy process
 // unless those are added to Agent's (parent) Inheritable and Ambient capability set. This requires the corresponding
 // flag been set on the Agent binary during build process.
@@ -531,6 +550,11 @@ func main() {
 	if er != nil {
 		// Failed to set Agent's capabilities but continuing bootstrap as capabilities may not be needed by Envoy's dynamic config
 		log.Errorf("Error while modifying Agent's capabilities: %v", er)
+	}
+
+	er = setupOpenfilesLimit()
+	if er != nil {
+		log.Errorf("Failed to setup open files limit: %v", er)
 	}
 
 	var agentStartTime = time.Now()
