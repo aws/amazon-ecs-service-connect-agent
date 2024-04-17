@@ -1,3 +1,142 @@
+# v1.27.11 (2024-04-05)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.10 (2024-03-29)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.9 (2024-03-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.8 (2024-03-18)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.7 (2024-03-07)
+
+* **Bug Fix**: Remove dependency on go-cmp.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.6 (2024-03-05)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.5 (2024-03-04)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.4 (2024-02-23)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.3 (2024-02-22)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.2 (2024-02-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.1 (2024-02-20)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.27.0 (2024-02-13)
+
+* **Feature**: Bump minimum Go version to 1.20 per our language support policy.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.26.6 (2024-01-22)
+
+* **Bug Fix**: Remove invalid escaping of shared config values. All values in the shared config file will now be interpreted literally, save for fully-quoted strings which are unwrapped for legacy reasons.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.26.5 (2024-01-18)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.26.4 (2024-01-16)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.26.3 (2024-01-04)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.26.2 (2023-12-20)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.26.1 (2023-12-08)
+
+* **Bug Fix**: Correct loading of [services *] sections into shared config.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.26.0 (2023-12-07)
+
+* **Feature**: Support modeled request compression. The only algorithm supported at this time is `gzip`.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.12 (2023-12-06)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.11 (2023-12-01)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.10 (2023-11-30)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.9 (2023-11-29)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.8 (2023-11-28.3)
+
+* **Bug Fix**: Correct resolution of S3Express auth disable toggle.
+
+# v1.25.7 (2023-11-28.2)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.6 (2023-11-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.5 (2023-11-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.4 (2023-11-20)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.3 (2023-11-17)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.2 (2023-11-16)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.1 (2023-11-15)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.25.0 (2023-11-14)
+
+* **Feature**: Add support for dynamic auth token from file and EKS container host in absolute/relative URIs in the HTTP credential provider.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.24.0 (2023-11-13)
+
+* **Feature**: Replace the legacy config parser with a modern, less-strict implementation. Parsing failures within a section will now simply ignore the invalid line rather than silently drop the entire section.
+* **Dependency Update**: Updated to the latest SDK module versions
+
 # v1.23.0 (2023-11-09.2)
 
 * **Feature**: BREAKFIX: In order to support subproperty parsing, invalid property definitions must not be ignored
