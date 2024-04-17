@@ -77,7 +77,7 @@ These environment variables offer controls for the bootstrap config generation f
 |`ENVOY_ADMIN_ACCESS_LOG_FILE`	|/path/to/access.log	|Log file for the Envoy admin access service	|/var/log/envoy_admin_access.log	|
 |`ENVOY_ADMIN_ACCESS_PORT`	|1234	|Port where Envoy admin access is reachable and also to override the default port through which Amazon ECS Service Connect Agent is connecting to envoy 	|9901	|
 |`ENVOY_ADMIN_ACCESS_ENABLE_IPV6`	|<true &#124; false>	|Determines if the Envoy will listen for IPv6 traffic on the admin interface 	|false	|
-|`ENVOY_LOG_LEVEL`	|<info &#124; warn &#124; error &#124; debug &#124; trace>	|Envoy Log Level	|info	|
+|`ENVOY_LOG_LEVEL`	|<info &#124; warn &#124; warning &#124; error &#124; debug &#124; trace &#124; critical &#124; off>	|Envoy Log Level	|info	|
 |`ENVOY_INITIAL_FETCH_TIMEOUT`	|	|Length of time Envoy will wait for an initial config response	|0	|
 |`ENVOY_CONCURRENCY`  | 2 | number of concurrent processes for Envoy |-1 |
 |`ENABLE_ENVOY_STATS_TAGS`	|<0 &#124; 1>	|Enables the use of App Mesh defined tags `appmesh.mesh` and `appmesh.virtual_node`. For more information, see [config.metrics.v3.TagSpecifier](https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/metrics/v3/stats.proto#config-metrics-v3-tagspecifier) in the Envoy documentation. To enable, set the value to 1. |   |
