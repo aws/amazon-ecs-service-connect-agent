@@ -388,7 +388,6 @@ func validateTimers(config *AgentConfig) {
 
 // validate that the log level is a known value otherwise use the default
 func validateEnvoyLogLevel(logLevel *string) {
-
 	switch *logLevel {
 	case "info":
 		fallthrough
@@ -396,11 +395,20 @@ func validateEnvoyLogLevel(logLevel *string) {
 		fallthrough
 	case "warn":
 		fallthrough
+	case "warning":
+		fallthrough
 	case "error":
 		fallthrough
 	case "trace":
+		fallthrough
+	case "critical":
+		fallthrough
+	case "off":
 		return
 	default:
+		if *logLevel != "" {
+			log.Warnf("Envoy log level [%s] is not supported, setting it to default [info].", *logLevel)
+		}
 		*logLevel = "info"
 	}
 

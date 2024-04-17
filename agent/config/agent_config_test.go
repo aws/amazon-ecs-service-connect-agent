@@ -62,11 +62,29 @@ func TestPopulateAgentConfigWithEnvVars(t *testing.T) {
 	assert.Equal(t, "127.0.0.2", agentConfig.AgentHttpAddress)
 }
 
+func TestOffLogLevel(t *testing.T) {
+	os.Setenv("ENVOY_LOG_LEVEL", "off")
+	defer os.Unsetenv("ENVOY_LOG_LEVEL")
+	var agentConfig AgentConfig
+
+	args := []string{os.Args[0], "-envoyConfigPath", "/tmp/config.yaml"}
+
+	agentConfig.ParseFlags(args)
+	agentConfig.SetDefaults()
+
+	assert.NotNil(t, agentConfig)
+	assert.NotNil(t, agentConfig.EnvoyLogLevel)
+	assert.Equal(t, "off", agentConfig.EnvoyLogLevel)
+}
+
 func TestInvalidLogLevel(t *testing.T) {
 	os.Setenv("ENVOY_LOG_LEVEL", "doomsday")
 	defer os.Unsetenv("ENVOY_LOG_LEVEL")
 	var agentConfig AgentConfig
 
+	args := []string{os.Args[0], "-envoyConfigPath", "/tmp/config.yaml"}
+
+	agentConfig.ParseFlags(args)
 	agentConfig.SetDefaults()
 
 	assert.NotNil(t, agentConfig)
