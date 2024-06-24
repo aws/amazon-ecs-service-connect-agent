@@ -10,7 +10,7 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/gorilla/mux v1.8.1
-	github.com/hashicorp/go-retryablehttp v0.7.6
+	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/nsf/jsondiff v0.0.0-20200515183724-f29ed568f4ce
 	github.com/prometheus/client_golang v1.19.1
 	github.com/prometheus/client_model v0.6.1
