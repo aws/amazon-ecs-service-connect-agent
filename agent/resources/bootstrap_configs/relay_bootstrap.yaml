@@ -76,6 +76,7 @@ static_resources:
         name: transport_sockets.tls
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: $APPNET_MANAGEMENT_DOMAIN_NAME # DNS Name of the service you are connecting to
           common_tls_context:
             validation_context:
               trusted_ca:
