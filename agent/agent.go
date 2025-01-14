@@ -108,10 +108,20 @@ func monitorCommand(pid int, messageSource *messagesources.MessageSources, pollI
 			wpid, err := syscall.Wait4(pid, &wstatus, options, &rusage)
 			log.Tracef("[%d] WaitPid returned [%d - %v]", pid, wpid, err)
 
-			if err != nil || wpid == pid {
+			if err != nil {
+				log.Errorf("Error returned while waiting for Envoy process [%d]: %v", pid, err)
+				pidIsAlive = false
+			}
+
+			if wpid == pid {
 				log.Warnf("[Envoy process %d] Exited with code [%d]", wpid, wstatus.ExitStatus())
-				log.Warnf("[Envoy process %d] Additional Exit data: [Core Dump: %t][Normal Exit: %t][Process Signalled: %t]",
-					wpid, wstatus.CoreDump(), wstatus.Exited(), wstatus.Signaled())
+
+				if wstatus.Exited() {
+					log.Infof("[Envoy process %d] exited normally with code: [%d]", wpid, wstatus.ExitStatus())
+				} else if wstatus.Signaled() {
+					log.Warnf("[Envoy process %d] was terminated by signal: [%v] with Core Dump: [%t]", wpid, wstatus.Signal(), wstatus.CoreDump())
+				}
+
 				pidIsAlive = false
 			}
 
@@ -232,12 +242,6 @@ func keepCommandAlive(agentConfig config.AgentConfig, messageSource *messagesour
 		waitStatus := monitorCommand(pid, messageSource, agentConfig.PidPollInterval)
 		log.Debugf("monitorCommand returned [%d]\n", waitStatus.ExitStatus())
 
-		// Don't restart if we were signalled
-		if waitStatus.Signaled() {
-			log.Debugf("Terminate is set. Sending [%d] a SIGTERM", pid)
-			break
-		}
-
 		if restartCount >= agentConfig.EnvoyRestartCount {
 			break
 		}
@@ -314,6 +318,7 @@ func setupSignalHandling(agentConfig config.AgentConfig, messageSources *message
 				fallthrough
 			case syscall.SIGQUIT:
 				gracefullyDrainEnvoyListeners(agentConfig)
+				log.Infof("Graceful Envoy listener draining completed! Exiting...")
 				messageSources.SetAgentExit()
 			default:
 				log.Debugf("Received unhandled signal [%v]\n", sig)
