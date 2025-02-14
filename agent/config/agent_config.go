@@ -53,7 +53,7 @@ const (
 
 	ENVOY_SERVER_SCHEME                  = "http"
 	ENVOY_SERVER_HOSTNAME                = "127.0.0.1"
-	ENVOY_RESTART_COUNT_DEFAULT          = 0
+	ENVOY_RESTART_COUNT_DEFAULT          = 3
 	ENVOY_RESTART_COUNT_MAX              = 10
 	ENVOY_ADMIN_PORT_DEFAULT             = 9901
 	ENVOY_ADMIN_MODE_DEFAULT             = "tcp"

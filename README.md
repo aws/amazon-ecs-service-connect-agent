@@ -130,7 +130,7 @@ These environment variables offer controls to alter Amazon ECS Service Connect A
 
 |Environment Key	|Example Value(s)	|Description	|Default Value	|
 |---	|---	|---	|---	|
-|`APPNET_ENVOY_RESTART_COUNT`	|10	|The number of times the Agent will restart Envoy within a running task	|0	|
+|`APPNET_ENVOY_RESTART_COUNT`	|10	|The number of times the Agent will restart Envoy within a running task	|3	|
 |`PID_POLL_INTERVAL_MS`	|25	|The interval at which the Envoy process’ state is checked	|100	|
 |`LISTENER_DRAIN_WAIT_TIME_S`	|1	|Controls the time Envoy waits for active connections to gracefully close before the process exits	|20	|
 |`APPNET_AGENT_ADMIN_MODE`  | <tcp &#124; uds> | Starts Agent's management interface server and binds it to either a tcp address or a unix socket. |  |
