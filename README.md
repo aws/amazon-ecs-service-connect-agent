@@ -55,7 +55,7 @@ docker-build:
         rm source Dockerfile
 ```
 
-Place these two files in a single directory within the agent directory and issue the `make docker-build` command. The resulting `ecs-service-connect:latest` can be used in ECS Service Connect or App Mesh as a sidecar.
+Use these two example files above, the Dockerfile.agent and Makefile, and place them in a single directory within the agent directory and issue the `make docker-build` command. The resulting `ecs-service-connect:latest` can be used in ECS Service Connect or App Mesh as a sidecar.
 
 ## Advanced Usage
 
