@@ -28,6 +28,8 @@ Example `Dockerfile.agent`:
 ```
 COPY agent /usr/bin/agent
 
+COPY relay_bootstrap.yaml /agent-resources/bootstrap_configs/relay_bootstrap.yaml
+
 CMD /usr/bin/agent
 ```
 
@@ -45,13 +47,15 @@ docker-build:
         ECR=$(shell echo $(IMAGE_STRING) | sed 's/\(.*\):\(.*\)/\1/g')
         echo "FROM $(IMAGE_STRING)" > source
         cat source Dockerfile.agent > Dockerfile
+        cp ../resources/bootstrap_configs/relay_bootstrap.yaml .
+	cp ../agent .
 
         aws ecr get-login-password | docker login --password-stdin --username AWS $(ECR)
         docker build -t $(IMAGE_NAME) .
         rm source Dockerfile
 ```
 
-Place these files along with the built `agent` binary in a single directory and issue the `make docker-build` command. The resulting `ecs-service-connect:latest` can be used in ECS Service Connect or App Mesh as a sidecar.
+Use these two example files above, the Dockerfile.agent and Makefile, and place them in a single directory within the agent directory and issue the `make docker-build` command. The resulting `ecs-service-connect:latest` can be used in ECS Service Connect or App Mesh as a sidecar.
 
 ## Advanced Usage
 
