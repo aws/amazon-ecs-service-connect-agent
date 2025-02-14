@@ -71,7 +71,7 @@ static_resources:
         cluster_name: appnet_management_cluster
         endpoints:
           - lb_endpoints:
-              endpoint: { address: { socket_address: { address: $APPNET_MANAGEMENT_DOMAIN_NAME, port_value: $APPNET_MANAGEMENT_PORT}}}
+              endpoint: { address: { socket_address: { address: $APPNET_MANAGEMENT_DOMAIN_NAME, port_value: $APPNET_MANAGEMENT_PORT }}}
       transport_socket:
         name: transport_sockets.tls
         typed_config:
