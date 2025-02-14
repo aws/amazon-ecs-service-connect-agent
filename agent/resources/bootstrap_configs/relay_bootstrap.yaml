@@ -52,9 +52,6 @@ static_resources:
                       - match: { prefix: "/" }
                         route:
                           cluster: appnet_management_cluster
-      filter_chain_match:
-        server_names:
-          - $APPNET_MANAGEMENT_DOMAIN_NAME
   clusters:
     - name: appnet_management_cluster
       type: logical_dns
@@ -74,17 +71,16 @@ static_resources:
         cluster_name: appnet_management_cluster
         endpoints:
           - lb_endpoints:
-              endpoint: { address: { socket_address: { address: $APPNET_MANAGEMENT_DOMAIN_NAME, port_value: $APPNET_MANAGEMENT_PORT }}}
+              endpoint: { address: { socket_address: { address: $APPNET_MANAGEMENT_DOMAIN_NAME, port_value: $APPNET_MANAGEMENT_PORT}}}
       transport_socket:
         name: transport_sockets.tls
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
-          auto_host_sni: true # replaces SNI with the hostname of the upstream host if this can be found
-          sni: $APPNET_MANAGEMENT_DOMAIN_NAME # Default value for SNI - domain name of the service you are connecting to
           common_tls_context:
             validation_context:
               trusted_ca:
                 filename: /etc/pki/tls/cert.pem
+          sni: $APPNET_MANAGEMENT_DOMAIN_NAME
 
 admin:
   address:
