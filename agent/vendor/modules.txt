@@ -325,9 +325,9 @@ gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
-# kernel.org/pub/linux/libs/security/libcap/cap v1.2.69
+# kernel.org/pub/linux/libs/security/libcap/cap v1.2.74
 ## explicit; go 1.11
 kernel.org/pub/linux/libs/security/libcap/cap
-# kernel.org/pub/linux/libs/security/libcap/psx v1.2.69
+# kernel.org/pub/linux/libs/security/libcap/psx v1.2.74
 ## explicit; go 1.11
 kernel.org/pub/linux/libs/security/libcap/psx

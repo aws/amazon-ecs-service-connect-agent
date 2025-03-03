@@ -5,9 +5,7 @@
 // grain permissions to perform privileged operations. Privileged
 // operations are required to do irregular system level operations
 // from code. You can read more about how Capabilities are intended to
-// work here:
-//
-//   https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/33528.pdf
+// work in this [Linux Symposium paper].
 //
 // This package supports native Go bindings for all the features
 // described in that paper as well as supporting subsequent changes to
@@ -15,35 +13,37 @@
 //
 // Some simple things you can do with this package are:
 //
-//   // Read and display the capabilities of the running process
-//   c := cap.GetProc()
-//   log.Printf("this process has these caps:", c)
+//	// Read and display the capabilities of the running process
+//	c := cap.GetProc()
+//	iab := cap.IABGetProc()
+//	log.Printf("this process has these caps: %q [%v]", c, iab)
 //
-//   // Drop any privilege a process might have (including for root,
-//   // but note root 'owns' a lot of system files so a cap-limited
-//   // root can still do considerable damage to a running system).
-//   old := cap.GetProc()
-//   empty := cap.NewSet()
-//   if err := empty.SetProc(); err != nil {
-//       log.Fatalf("failed to drop privilege: %q -> %q: %v", old, empty, err)
-//   }
-//   now := cap.GetProc()
-//   if cf, _ := now.Cf(empty); cf != 0 {
-//       log.Fatalf("failed to fully drop privilege: have=%q, wanted=%q", now, empty)
-//   }
+//	// Drop any privilege a process might have (including for root,
+//	// but note root 'owns' a lot of system files so a cap-limited
+//	// root can still do considerable damage to a running system).
+//	old := cap.GetProc()
+//	empty := cap.NewSet()
+//	if err := empty.SetProc(); err != nil {
+//	    log.Fatalf("failed to drop privilege: %q -> %q: %v", old, empty, err)
+//	}
+//	now := cap.GetProc()
+//	if cf, _ := now.Cf(empty); cf != 0 {
+//	    log.Fatalf("failed to fully drop privilege: have=%q, wanted=%q", now, empty)
+//	}
 //
-// The "cap" package operates with POSIX semantics for security
+// This `"cap"` package operates with POSIX semantics for security
 // state. That is all OS threads are kept in sync at all times. The
-// package "kernel.org/pub/linux/libs/security/libcap/psx" is used to
-// implement POSIX semantics system calls that manipulate thread state
-// uniformly over the whole Go (and any CGo linked) process runtime.
+// package `"kernel.org/pub/linux/libs/security/libcap/psx"` is used
+// to implement POSIX semantics system calls that manipulate thread
+// state uniformly over the whole Go (and any CGo linked) process
+// runtime.
 //
 // Note, if the Go runtime syscall interface contains the Linux
-// variant syscall.AllThreadsSyscall() API (it debuted in go1.16 see
-// https://github.com/golang/go/issues/1435 for its history) then the
-// "libcap/psx" package will use that to invoke Capability setting
-// system calls in pure Go binaries. With such an enhanced Go runtime,
-// to force this behavior, use the CGO_ENABLED=0 environment variable.
+// variant `syscall.AllThreadsSyscall()` API (it debuted in go1.16 see
+// [Go bug 1435] for its history) then the "libcap/psx" package will
+// use that to invoke Capability setting system calls in pure Go
+// binaries. With such an enhanced Go runtime, to force this behavior,
+// use the CGO_ENABLED=0 environment variable.
 //
 // POSIX semantics are more secure than trying to manage privilege at
 // a thread level when those threads share a common memory image as
@@ -69,7 +69,7 @@
 // please read its documentation carefully, if you find that you need
 // it.
 //
-// See https://sites.google.com/site/fullycapable/ for recent updates,
+// See [the Fully Capable site] for recent updates,
 // some more complete walk-through examples of ways of using
 // 'cap.Set's etc and information on how to file bugs.
 //
@@ -77,6 +77,10 @@
 //
 // The cap and psx packages are licensed with a (you choose) BSD
 // 3-clause or GPL2. See LICENSE file for details.
+//
+// [Linux Symposium paper]: https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/33528.pdf
+// [Go bug 1435]: https://github.com/golang/go/issues/1435
+// [the Fully Capable site]: https://sites.google.com/site/fullycapable/
 package cap // import "kernel.org/pub/linux/libs/security/libcap/cap"
 
 import (
@@ -194,6 +198,7 @@ type syscaller struct {
 
 // caprcall provides a pointer etc wrapper for the system calls
 // associated with getcap.
+//
 //go:uintptrescapes
 func (sc *syscaller) caprcall(call uintptr, h *header, d []data) error {
 	x := uintptr(0)
@@ -209,6 +214,7 @@ func (sc *syscaller) caprcall(call uintptr, h *header, d []data) error {
 
 // capwcall provides a pointer etc wrapper for the system calls
 // associated with setcap.
+//
 //go:uintptrescapes
 func (sc *syscaller) capwcall(call uintptr, h *header, d []data) error {
 	x := uintptr(0)
@@ -466,9 +472,10 @@ func (sc *syscaller) setAmbient(enable bool, val ...Value) error {
 // permission is available to perform this task. The settings are
 // performed in order and the function returns immediately an error is
 // detected. Use GetAmbient() to unravel where things went
-// wrong. Note, the cap package manages an abstraction IAB that
-// captures all three inheritable vectors in a single type. Consider
-// using that.
+// wrong.
+//
+// Note, the cap package manages an abstraction IAB that captures all
+// three inheritable vectors in a single type. Consider using that.
 func SetAmbient(enable bool, val ...Value) error {
 	state, sc := scwStateSC()
 	defer scwSetState(launchBlocked, state, -1)
