@@ -80,6 +80,7 @@ static_resources:
             validation_context:
               trusted_ca:
                 filename: /etc/pki/tls/cert.pem
+          sni: $APPNET_MANAGEMENT_DOMAIN_NAME
 
 admin:
   address:
