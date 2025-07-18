@@ -891,6 +891,9 @@ adsConfig:
           grpc.http2.max_pings_without_data: { intValue: "0" }
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
+          grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_concurrent_streams: { intValue: "1" }
 
 cdsConfig:
   ads: {}
@@ -923,6 +926,9 @@ adsConfig:
           grpc.http2.max_pings_without_data: { intValue: "0" }
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
+          grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_concurrent_streams: { intValue: "1" }
 
 cdsConfig:
   ads: {}
@@ -971,6 +977,9 @@ adsConfig:
           grpc.http2.max_pings_without_data: { intValue: "0" }
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
+          grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_concurrent_streams: { intValue: "1" }
 
 cdsConfig:
   ads: {}
@@ -1016,6 +1025,9 @@ adsConfig:
           grpc.http2.max_pings_without_data: { intValue: "0" }
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
+          grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_concurrent_streams: { intValue: "1" }
 
 cdsConfig:
   ads: {}
