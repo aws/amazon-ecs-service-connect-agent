@@ -77,6 +77,7 @@ const (
 	GRPC_MAX_PINGS_WITHOUT_DATA = 0
 	GRPC_KEEPALIVE_TIME_MS      = 10000
 	GRPC_KEEPALIVE_TIMEOUT_MS   = 20000
+	GRPC_INITIAL_BACKOFF_MS     = 10000
 	listenerProtocolRegex       = ".*?\\.ingress\\.((\\w+?)\\.)[0-9]+?\\.(.+?)$"
 	listenerPortRegex           = ".*?\\.ingress\\.\\w+?\\.(([0-9]+?)\\.)(.+?)$"
 	envoyRdsRouteConf           = ".*?\\.ingress\\.\\w+?\\.[0-9]+?\\.rds\\.((.*?)\\.)(.+?)$"
@@ -567,6 +568,7 @@ func buildAdsGrpcServiceForRelayEndpoint(endpoint string) (*core.GrpcService, er
 			"grpc.http2.max_pings_without_data": buildGoogleGrpcIntChannelArg(GRPC_MAX_PINGS_WITHOUT_DATA),
 			"grpc.keepalive_time_ms":            buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIME_MS),
 			"grpc.keepalive_timeout_ms":         buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIMEOUT_MS),
+			"grpc.initial_reconnect_backoff_ms": buildGoogleGrpcIntChannelArg(GRPC_INITIAL_BACKOFF_MS),
 		},
 	}
 	return &core.GrpcService{
@@ -586,6 +588,7 @@ func buildRegionalAdsGrpcService(endpoint string, region string, signingName str
 			"grpc.http2.max_pings_without_data": buildGoogleGrpcIntChannelArg(GRPC_MAX_PINGS_WITHOUT_DATA),
 			"grpc.keepalive_time_ms":            buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIME_MS),
 			"grpc.keepalive_timeout_ms":         buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIMEOUT_MS),
+			"grpc.initial_reconnect_backoff_ms": buildGoogleGrpcIntChannelArg(GRPC_INITIAL_BACKOFF_MS),
 		},
 	}
 	iamConfig, err := anypb.New(&grpc_cred.AwsIamConfig{
