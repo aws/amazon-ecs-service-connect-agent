@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os/exec"
 	"strconv"
@@ -72,6 +73,15 @@ const (
 	sysPlatformKey      = "systemPlatform"
 	sysKernelVersionKey = "systemKernelVersion"
 )
+
+// validNetworkModes defines the set of valid ECS network modes
+var validNetworkModes = map[string]bool{
+	"awsvpc":  true,
+	"bridge":  true,
+	"host":    true,
+	"none":    true,
+	"default": true,
+}
 
 func buildMetadataForK8sPlatform(mapping map[string]interface{}) {
 	k8sVersion := env.Get(k8sVersionEnvVar)
@@ -264,8 +274,73 @@ func getEcsContainerSupportedIPFamilies(uri string) string {
 		log.Warnf("Containers info not found in ECS metadata: %v", metadataMap)
 		return ""
 	}
-	// all containers share the same networks
-	containerInfo := containers.([]interface{})[0]
+
+	containersArray := containers.([]interface{})
+
+	// Determine network mode by iterating through all containers to find a valid one
+	networkMode := getNetworkModeFromContainers(containersArray)
+	if networkMode == "" {
+		log.Warnf("Unable to determine network mode from any container in ECS metadata")
+		return ""
+	}
+
+	switch networkMode {
+	case "awsvpc":
+		// In awsvpc mode, we always expect all containers returned in TMDS response to have the complete set
+		// of IP address families so, we just check the first container from the list to infer the supported IP families
+		return getIPFamiliesFromContainer(containersArray[0])
+	case "bridge":
+		// In bridge mode however, TMDS will always just return IPv4 addresses for application container
+		// therefore, we need to lookup the Pause container to determine the complete set of IP addresses
+		pauseContainer := findContainerByType(containersArray, "CNI_PAUSE")
+		if pauseContainer == nil {
+			log.Warnf("CNI_PAUSE container not found in the containers from ECS metadata in bridge mode")
+			return ""
+		}
+		return getIPFamiliesForBridgeMode(pauseContainer, containersArray)
+	default:
+		log.Warnf("Unsupported network mode: %s returned from containers metadata", networkMode)
+		return ""
+	}
+}
+
+func getNetworkModeFromContainers(containers []interface{}) string {
+	// Iterate through all containers to find a valid NetworkMode
+	for _, container := range containers {
+		containerMap := container.(map[string]interface{})
+		networks := containerMap["Networks"]
+		if networks == nil || len(networks.([]interface{})) == 0 {
+			continue
+		}
+
+		networksArray := networks.([]interface{})
+		// Iterate through all networks within this container
+		for _, network := range networksArray {
+			networkMap := network.(map[string]interface{})
+			networkMode := networkMap["NetworkMode"]
+			if networkMode != nil {
+				networkModeStr := networkMode.(string)
+				// Check if it's one of the valid network modes
+				if validNetworkModes[networkModeStr] {
+					return networkModeStr
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func findContainerByType(containers []interface{}, containerType string) interface{} {
+	for _, container := range containers {
+		containerMap := container.(map[string]interface{})
+		if containerMap["Type"] != nil && containerMap["Type"].(string) == containerType {
+			return container
+		}
+	}
+	return nil
+}
+
+func getIPFamiliesFromContainer(containerInfo interface{}) string {
 	networks := containerInfo.(map[string]interface{})["Networks"]
 	if networks == nil || len(networks.([]interface{})) == 0 {
 		log.Warnf("Networks info not found in container info in ECS metadata: %v", containerInfo)
@@ -275,14 +350,18 @@ func getEcsContainerSupportedIPFamilies(uri string) string {
 	hasIPv4Addresses := false
 	hasIPv6Addresses := false
 	networksArray := networks.([]interface{})
+
 	for i := 0; i < len(networksArray); i++ {
-		if networksArray[i].(map[string]interface{})["IPv4Addresses"] != nil {
+		networkMap := networksArray[i].(map[string]interface{})
+
+		if networkMap["IPv4Addresses"] != nil && len(networkMap["IPv4Addresses"].([]interface{})) > 0 {
 			hasIPv4Addresses = true
 		}
-		if networksArray[i].(map[string]interface{})["IPv6Addresses"] != nil {
+		if networkMap["IPv6Addresses"] != nil && len(networkMap["IPv6Addresses"].([]interface{})) > 0 {
 			hasIPv6Addresses = true
 		}
 	}
+
 	if hasIPv4Addresses && hasIPv6Addresses {
 		return "ALL"
 	}
@@ -292,8 +371,56 @@ func getEcsContainerSupportedIPFamilies(uri string) string {
 	if hasIPv6Addresses {
 		return "IPv6_ONLY"
 	}
-	log.Warnf("Neither IPv4 or IPv6 addresses are found in ECS metadata Networks")
+
+	log.Warnf("Neither IPv4 or IPv6 addresses are found in ECS metadata container Networks")
 	return ""
+}
+
+func getIPFamiliesForBridgeMode(pauseContainer interface{}, allContainers []interface{}) string {
+	// First check what IP families the pause container has
+	pauseContainerIPFamilies := getIPFamiliesFromContainer(pauseContainer)
+
+	if pauseContainerIPFamilies == "IPv4_ONLY" {
+		return pauseContainerIPFamilies
+	}
+
+	if pauseContainerIPFamilies == "ALL" {
+		// Pause container has both IPv4 and IPv6 even in IPv6_only mode, we need to additionally check APPNET_CONTAINER_IP_MAPPING
+		// to determine if it's IPv6_only or dual stack mode.
+		appnetContainerIpMapping := env.Get("APPNET_CONTAINER_IP_MAPPING")
+		if appnetContainerIpMapping == "" {
+			log.Warnf("APPNET_CONTAINER_IP_MAPPING environment variable not found")
+			return pauseContainerIPFamilies // Default to ALL if mapping is not available
+		}
+
+		// Parse the Appnet Container IP mapping Json
+		var ipMapping map[string]string
+		if err := json.Unmarshal([]byte(appnetContainerIpMapping), &ipMapping); err != nil {
+			log.Warnf("Failed to parse APPNET_CONTAINER_IP_MAPPING: %v", err)
+			return "ALL" // Default to ALL if parsing fails
+		}
+
+		// Get the first container IP type from the mapping
+		for _, ipAddress := range ipMapping {
+			if isIPv6Address(ipAddress) {
+				return "IPv6_ONLY"
+			} else {
+				return "ALL"
+			}
+		}
+
+		log.Warnf("No containers found in APPNET_CONTAINER_IP_MAPPING")
+		return "ALL" // Default to ALL if no containers in mapping
+	}
+
+	// For other cases (IPv6_ONLY or empty), return as is
+	return pauseContainerIPFamilies
+}
+
+// isIPv6Address checks if the given IP address is IPv6
+func isIPv6Address(ipAddress string) bool {
+	ip := net.ParseIP(ipAddress)
+	return ip != nil && ip.To4() == nil
 }
 
 func getEc2InstanceMetadata(query string) (string, error) {
