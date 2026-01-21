@@ -928,6 +928,8 @@ adsConfig:
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
           grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
@@ -961,6 +963,8 @@ adsConfig:
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
           grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
@@ -1010,6 +1014,8 @@ adsConfig:
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
           grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
@@ -1056,6 +1062,8 @@ adsConfig:
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
           grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}

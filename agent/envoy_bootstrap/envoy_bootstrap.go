@@ -69,18 +69,20 @@ var (
 )
 
 const (
-	runtimeMetadataNamespace    = "aws.appmesh.static_runtime"
-	staticResourcesKey          = "staticResources"
-	tracingKey                  = "tracing"
-	statsConfigKey              = "statsConfig"
-	statsSinksKey               = "statsSinks"
-	GRPC_MAX_PINGS_WITHOUT_DATA = 0
-	GRPC_KEEPALIVE_TIME_MS      = 10000
-	GRPC_KEEPALIVE_TIMEOUT_MS   = 20000
-	GRPC_INITIAL_BACKOFF_MS     = 10000
-	listenerProtocolRegex       = ".*?\\.ingress\\.((\\w+?)\\.)[0-9]+?\\.(.+?)$"
-	listenerPortRegex           = ".*?\\.ingress\\.\\w+?\\.(([0-9]+?)\\.)(.+?)$"
-	envoyRdsRouteConf           = ".*?\\.ingress\\.\\w+?\\.[0-9]+?\\.rds\\.((.*?)\\.)(.+?)$"
+	runtimeMetadataNamespace         = "aws.appmesh.static_runtime"
+	staticResourcesKey               = "staticResources"
+	tracingKey                       = "tracing"
+	statsConfigKey                   = "statsConfig"
+	statsSinksKey                    = "statsSinks"
+	GRPC_MAX_PINGS_WITHOUT_DATA      = 0
+	GRPC_KEEPALIVE_TIME_MS           = 10000
+	GRPC_KEEPALIVE_TIMEOUT_MS        = 20000
+	GRPC_INITIAL_BACKOFF_MS          = 10000
+	GRPC_MAX_CONNECTION_AGE_MS       = 2400000 // Set to 40 mins to be roughly equal to the interval at which connection between EMS and relay is reset
+	GRPC_MAX_CONNECTION_AGE_GRACE_MS = 5000
+	listenerProtocolRegex            = ".*?\\.ingress\\.((\\w+?)\\.)[0-9]+?\\.(.+?)$"
+	listenerPortRegex                = ".*?\\.ingress\\.\\w+?\\.(([0-9]+?)\\.)(.+?)$"
+	envoyRdsRouteConf                = ".*?\\.ingress\\.\\w+?\\.[0-9]+?\\.rds\\.((.*?)\\.)(.+?)$"
 )
 
 type EnvoyCLI interface {
@@ -575,6 +577,8 @@ func buildAdsGrpcServiceForRelayEndpoint(endpoint string) (*core.GrpcService, er
 			"grpc.keepalive_time_ms":            buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIME_MS),
 			"grpc.keepalive_timeout_ms":         buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIMEOUT_MS),
 			"grpc.initial_reconnect_backoff_ms": buildGoogleGrpcIntChannelArg(GRPC_INITIAL_BACKOFF_MS),
+			"grpc.max_connection_age_ms":        buildGoogleGrpcIntChannelArg(GRPC_MAX_CONNECTION_AGE_MS),
+			"grpc.max_connection_age_grace_ms":  buildGoogleGrpcIntChannelArg(GRPC_MAX_CONNECTION_AGE_GRACE_MS),
 		},
 	}
 	return &core.GrpcService{
@@ -595,6 +599,8 @@ func buildRegionalAdsGrpcService(endpoint string, region string, signingName str
 			"grpc.keepalive_time_ms":            buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIME_MS),
 			"grpc.keepalive_timeout_ms":         buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIMEOUT_MS),
 			"grpc.initial_reconnect_backoff_ms": buildGoogleGrpcIntChannelArg(GRPC_INITIAL_BACKOFF_MS),
+			"grpc.max_connection_age_ms":        buildGoogleGrpcIntChannelArg(GRPC_MAX_CONNECTION_AGE_MS),
+			"grpc.max_connection_age_grace_ms":  buildGoogleGrpcIntChannelArg(GRPC_MAX_CONNECTION_AGE_GRACE_MS),
 		},
 	}
 	iamConfig, err := anypb.New(&grpc_cred.AwsIamConfig{
