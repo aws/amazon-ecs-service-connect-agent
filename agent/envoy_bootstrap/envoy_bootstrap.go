@@ -864,7 +864,7 @@ func appendStaticLocalCluster(b *boot.Bootstrap) error {
 	// for static local cluster, we set the timeout as the minimum,
 	// to not fail envoy which does not turn on zone aware routing
 	initialFetchTimeout := &durationpb.Duration{
-		Nanos: 1,
+		Nanos: 1000000,
 	}
 	configSource, err := buildAdsConfigSource(initialFetchTimeout)
 	if err != nil {

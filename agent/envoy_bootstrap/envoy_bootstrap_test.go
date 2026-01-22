@@ -1684,7 +1684,7 @@ staticResources:
       edsClusterConfig:
         edsConfig:
           ads: {}
-          initialFetchTimeout: 0.000000001s
+          initialFetchTimeout: 0.001s
           resourceApiVersion: V3
 `)
 }
