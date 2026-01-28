@@ -544,14 +544,17 @@ func buildLayeredRuntime() (*boot.LayeredRuntime, error) {
 	}, nil
 }
 
-func buildClusterManager() *boot.ClusterManager {
+func buildClusterManager(isServiceConnect bool) *boot.ClusterManager {
 	logPath := env.Or("ENVOY_OUTLIER_DETECTION_EVENT_LOG_PATH", "/dev/stdout")
-	return &boot.ClusterManager{
+	clusterManager := &boot.ClusterManager{
 		OutlierDetection: &boot.ClusterManager_OutlierDetection{
 			EventLogPath: logPath,
 		},
-		LocalClusterName: config.ENVOY_LOCAL_CLUSTER_NAME,
 	}
+	if isServiceConnect {
+		clusterManager.LocalClusterName = config.ENVOY_LOCAL_CLUSTER_NAME
+	}
+	return clusterManager
 }
 
 func buildFileDataSource(filename string) *core.DataSource {
@@ -1532,17 +1535,18 @@ func bootstrap(agentConfig config.AgentConfig, fileUtil FileUtil, envoyCLIInst E
 	}
 
 	zone := platforminfo.GetZoneId(metadata)
+	isServiceConnect := agentConfig.XdsEndpointUdsPath != ""
 
 	b := &boot.Bootstrap{
 		Admin:            admin,
 		Node:             buildNode(id, clusterId, region, zone, metadata),
 		LayeredRuntime:   lr,
 		DynamicResources: dr,
-		ClusterManager:   buildClusterManager(),
+		ClusterManager:   buildClusterManager(isServiceConnect),
 	}
 
 	// append Static cluster for service connect only
-	if agentConfig.XdsEndpointUdsPath != "" {
+	if isServiceConnect {
 		appendStaticLocalCluster(b)
 	}
 
