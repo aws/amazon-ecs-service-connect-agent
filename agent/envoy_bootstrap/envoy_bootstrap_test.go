@@ -872,17 +872,25 @@ layers:
 
 func TestBuildClusterManager(t *testing.T) {
 	setup()
-	checkMessage(t, buildClusterManager(), `
+	checkMessage(t, buildClusterManager(true), `
 outlierDetection:
   eventLogPath: /dev/stdout
 localClusterName: `+config.ENVOY_LOCAL_CLUSTER_NAME+`
 `)
 }
 
+func TestBuildClusterManager_noServiceConnect(t *testing.T) {
+	setup()
+	checkMessage(t, buildClusterManager(false), `
+outlierDetection:
+  eventLogPath: /dev/stdout
+`)
+}
+
 func TestBuildClusterManager_CustomOutlierDetection(t *testing.T) {
 	setup()
 	os.Setenv("ENVOY_OUTLIER_DETECTION_EVENT_LOG_PATH", "/custom/path")
-	checkMessage(t, buildClusterManager(), `
+	checkMessage(t, buildClusterManager(true), `
 outlierDetection:
   eventLogPath: /custom/path
 localClusterName: `+config.ENVOY_LOCAL_CLUSTER_NAME+`
@@ -928,6 +936,8 @@ adsConfig:
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
           grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
@@ -961,6 +971,8 @@ adsConfig:
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
           grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
@@ -1010,6 +1022,8 @@ adsConfig:
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
           grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
@@ -1056,6 +1070,8 @@ adsConfig:
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
           grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
