@@ -224,14 +224,17 @@ func getEcsContainerMetadata(uri string, ecsMetadata map[string]interface{}) {
 	// For reference on all the information that is returned from the task metadata endpoint, see
 	// https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v4.html
 	// Here we only pick the ones that are needed.
-	if ecsClusterArn := metadataMap["Cluster"]; ecsClusterArn != "" {
+	if ecsClusterArn, exists := metadataMap["Cluster"]; exists {
 		ecsMetadata[ecsClusterArnKey] = ecsClusterArn
 	}
-	if ecsTaskArn := metadataMap["TaskARN"]; ecsTaskArn != "" {
+	if ecsTaskArn, exists := metadataMap["TaskARN"]; exists {
 		ecsMetadata[ecsTaskArnKey] = ecsTaskArn
 	}
-	if availabilityZone := metadataMap["AvailabilityZone"]; availabilityZone != "" {
+	if availabilityZone, exists := metadataMap["AvailabilityZone"]; exists {
 		ecsMetadata[AvailabilityZoneKey] = availabilityZone
+	}
+	if availabilityZoneID, exists := metadataMap["AvailabilityZoneID"]; exists {
+		ecsMetadata[AvailabilityZoneIDKey] = availabilityZoneID
 	}
 
 }

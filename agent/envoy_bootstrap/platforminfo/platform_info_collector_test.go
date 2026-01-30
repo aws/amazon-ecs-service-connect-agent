@@ -114,10 +114,16 @@ func setupEcsMetadataServer() *httptest.Server {
 		res.Write([]byte(containerMetadataResponseNoNetworks))
 	})
 
-	containerMetadataResponseDefault := `{ "Cluster": "TestCluster", "TaskARN": "TestTask", "AvailabilityZone": "us-west-2d"}`
+	containerMetadataResponseDefault := `{ "Cluster": "TestCluster", "TaskARN": "TestTask", "AvailabilityZone": "us-west-2d", "AvailabilityZoneID": "usw2-az4"}`
 	mux.HandleFunc("/ecsmetadata/default/task", func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(http.StatusOK)
 		res.Write([]byte(containerMetadataResponseDefault))
+	})
+
+	containerMetadataResponseNoAZID := `{ "Cluster": "TestCluster", "TaskARN": "TestTask", "AvailabilityZone": "us-west-2d"}`
+	mux.HandleFunc("/ecsmetadata/noazid/task", func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(http.StatusOK)
+		res.Write([]byte(containerMetadataResponseNoAZID))
 	})
 	srv := httptest.NewServer(mux)
 	return srv
@@ -280,6 +286,24 @@ func TestGetEcsContainerMetadata(t *testing.T) {
 
 	ecsMetadata := make(map[string]interface{})
 	getEcsContainerMetadata(srv.URL+"/ecsmetadata/default/task", ecsMetadata)
+	getEcsEnvoyContainerMetadata(srv.URL, ecsMetadata)
+	assert.NotNil(t, ecsMetadata)
+	assert.Equal(t, 6, len(ecsMetadata))
+	assert.Equal(t, "TestCluster", ecsMetadata["ecsClusterArn"])
+	assert.Equal(t, "TestTask", ecsMetadata["ecsTaskArn"])
+	assert.Equal(t, "us-west-2d", ecsMetadata["AvailabilityZone"])
+	assert.Equal(t, "usw2-az4", ecsMetadata["AvailabilityZoneID"])
+	assert.Equal(t, "5", ecsMetadata["CPU"])
+	assert.Equal(t, "0.25", ecsMetadata["Memory"])
+}
+
+func TestGetEcsContainerMetadataNoAZID(t *testing.T) {
+	setup()
+	srv := setupEcsMetadataServer()
+	defer srv.Close()
+
+	ecsMetadata := make(map[string]interface{})
+	getEcsContainerMetadata(srv.URL+"/ecsmetadata/noazid/task", ecsMetadata)
 	getEcsEnvoyContainerMetadata(srv.URL, ecsMetadata)
 	assert.NotNil(t, ecsMetadata)
 	assert.Equal(t, 5, len(ecsMetadata))
@@ -463,6 +487,7 @@ func TestBuildEcsPlatformMap(t *testing.T) {
 
 	assert.NotNil(t, platformMap["AvailabilityZone"])
 	assert.Equal(t, "us-west-2d", platformMap["AvailabilityZone"])
+	assert.Equal(t, "usw2-az4", platformMap["AvailabilityZoneID"])
 }
 
 func TestBuildSupportedIPFamilies(t *testing.T) {
