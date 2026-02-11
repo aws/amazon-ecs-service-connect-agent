@@ -171,6 +171,7 @@ These environment variables are used to pass operating platform/environment info
 |`APPMESH_PLATFORM_K8S_POD_UID`  | `arn:aws:ecs:region:aws_account_id:container-instance/cluster-name/container-instance-id` | For Envoy running on K8s, Pod UID injected by App Mesh Controller. |  |
 |`APPNET_CONTAINER_IP_MAPPING`  | `{"App1":"172.10.1.1","App2":"172.10.1.2"}` | Specifies address mapping of application container as set by ECS agent in ECS Service Connect. |  |
 |`APPNET_LISTENER_PORT_MAPPING`  | `{"Listener1":15000,"Listener2":15001}` | Specifies port mapping for each application port as set by ECS agent in ECS Service Connect. |  |
+|`APPNET_FIPS_MODE_ENABLED`  | <0 &#124; 1 &#124; true &#124; false> | Indicates whether FIPS mode is enabled for the platform. Accepts truthy values (1, true, TRUE) or falsy values (0, false, FALSE). | false |
 
 ### Deprecated
 

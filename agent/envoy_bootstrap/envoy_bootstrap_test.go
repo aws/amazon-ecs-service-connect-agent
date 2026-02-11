@@ -3161,7 +3161,7 @@ func TestBuildMetadataForNode_FipsModeEnabled_NotSet(t *testing.T) {
 	setup()
 	metadata, err := buildMetadataForNode()
 	assert.Nil(t, err)
-	// When FIPS_MODE_ENABLED is not set or false, fipsModeEnabled should not be in metadata
+	// When APPNET_FIPS_MODE_ENABLED is not set or false, fipsModeEnabled should not be in metadata
 	if metadata != nil {
 		metadataMap := metadata.AsMap()
 		if platformInfo, exists := metadataMap["aws.appmesh.platformInfo"]; exists {
@@ -3183,7 +3183,7 @@ func TestBuildMetadataForNode_FipsModeEnabled_TruthyValues(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		os.Setenv("FIPS_MODE_ENABLED", tc.value)
+		os.Setenv("APPNET_FIPS_MODE_ENABLED", tc.value)
 		metadata, err := buildMetadataForNode()
 		assert.Nil(t, err)
 
@@ -3198,7 +3198,7 @@ metadata:
     fipsModeEnabled: true
 `
 		checkMessageSupersetMatch(t, buildNode("id", "cluster", "us-west-2", "use1-az1", metadata), expectedYaml)
-		os.Unsetenv("FIPS_MODE_ENABLED")
+		os.Unsetenv("APPNET_FIPS_MODE_ENABLED")
 	}
 }
 
@@ -3213,7 +3213,7 @@ func TestBuildMetadataForNode_FipsModeEnabled_FalsyValues(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		os.Setenv("FIPS_MODE_ENABLED", tc.value)
+		os.Setenv("APPNET_FIPS_MODE_ENABLED", tc.value)
 		metadata, err := buildMetadataForNode()
 		assert.Nil(t, err)
 
@@ -3226,14 +3226,14 @@ func TestBuildMetadataForNode_FipsModeEnabled_FalsyValues(t *testing.T) {
 				assert.False(t, fipsExists, "fipsModeEnabled should not exist when false")
 			}
 		}
-		os.Unsetenv("FIPS_MODE_ENABLED")
+		os.Unsetenv("APPNET_FIPS_MODE_ENABLED")
 	}
 }
 
 func TestBuildMetadataForNode_FipsModeEnabled_InvalidValue(t *testing.T) {
 	setup()
-	os.Setenv("FIPS_MODE_ENABLED", "invalid")
-	defer os.Unsetenv("FIPS_MODE_ENABLED")
+	os.Setenv("APPNET_FIPS_MODE_ENABLED", "invalid")
+	defer os.Unsetenv("APPNET_FIPS_MODE_ENABLED")
 	metadata, err := buildMetadataForNode()
 	// The function should still succeed but the platformInfo should not contain fipsModeEnabled
 	assert.Nil(t, err)
