@@ -301,3 +301,35 @@ func TestGetHcPollInterval(t *testing.T) {
 	agentConfig.SetDefaults()
 	assert.Equal(t, 2001*time.Millisecond, agentConfig.HcPollInterval)
 }
+
+// TestSkipDeprecatedLogs* tests verify ENVOY_SKIP_DEPRECATED_LOGS environment variable handling
+func TestSkipDeprecatedLogsDefault(t *testing.T) {
+	var agentConfig AgentConfig
+	agentConfig.SetDefaults()
+	assert.True(t, agentConfig.SkipDeprecatedLogs)
+}
+
+func TestSkipDeprecatedLogsEnabled(t *testing.T) {
+	os.Setenv("ENVOY_SKIP_DEPRECATED_LOGS", "true")
+	defer os.Unsetenv("ENVOY_SKIP_DEPRECATED_LOGS")
+	var agentConfig AgentConfig
+	agentConfig.SetDefaults()
+	assert.True(t, agentConfig.SkipDeprecatedLogs)
+}
+
+func TestSkipDeprecatedLogsDisabled(t *testing.T) {
+	os.Setenv("ENVOY_SKIP_DEPRECATED_LOGS", "false")
+	defer os.Unsetenv("ENVOY_SKIP_DEPRECATED_LOGS")
+	var agentConfig AgentConfig
+	agentConfig.SetDefaults()
+	assert.False(t, agentConfig.SkipDeprecatedLogs)
+}
+
+func TestSkipDeprecatedLogsInvalidValue(t *testing.T) {
+	os.Setenv("ENVOY_SKIP_DEPRECATED_LOGS", "invalid")
+	defer os.Unsetenv("ENVOY_SKIP_DEPRECATED_LOGS")
+	var agentConfig AgentConfig
+	agentConfig.SetDefaults()
+	assert.True(t, agentConfig.SkipDeprecatedLogs) // Should fall back to default (true)
+}
+	
