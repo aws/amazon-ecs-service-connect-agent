@@ -85,6 +85,7 @@ These environment variables offer controls for the bootstrap config generation f
 |`ENVOY_INITIAL_FETCH_TIMEOUT`	|	|Length of time Envoy will wait for an initial config response	|0	|
 |`ENVOY_CONCURRENCY`  | 2 | number of concurrent processes for Envoy |-1 |
 |`ENABLE_ENVOY_STATS_TAGS`	|<0 &#124; 1>	|Enables the use of App Mesh defined tags `appmesh.mesh` and `appmesh.virtual_node`. For more information, see [config.metrics.v3.TagSpecifier](https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/metrics/v3/stats.proto#config-metrics-v3-tagspecifier) in the Envoy documentation. To enable, set the value to 1. |   |
+|`ENVOY_SKIP_DEPRECATED_LOGS`	|<true &#124; false>	|Suppresses Envoy deprecated field warning logs. Enabled by default. Set to `false` to see deprecation warnings	|true	|
 |`ENVOY_STATS_FLUSH_INTERVAL`  | 5000ms | Sets optional duration between flushes to configured stats sinks. (unit: Duration) | 5000ms |
 |`ENVOY_STATS_CONFIG_FILE`	|	|Stats config file (see: https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/observability/statistics).	|	|
 |`ENVOY_STATS_SINKS_CFG_FILE`	|	|Specify a file path in the Envoy container file system to override the default configuration with your own. For more information, see [config.metrics.v3.StatsSink](https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/metrics/v3/stats.proto#config-metrics-v3-statssink) in the Envoy documentation.	|	|
