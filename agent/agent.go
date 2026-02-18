@@ -77,6 +77,13 @@ func buildCommandArgs(agentConfig config.AgentConfig) []string {
 		args = append(args, "--disable-hot-restart")
 	}
 
+	// Suppress deprecated feature warning logs to reduce noise in customer logs.
+	// The runtime.deprecated_feature_use stat will still increment for monitoring.
+	// See: https://www.envoyproxy.io/docs/envoy/latest/operations/cli#cmdoption-skip-deprecated-logs
+	if agentConfig.SkipDeprecatedLogs {
+		args = append(args, "--skip-deprecated-logs")
+	}
+
 	if len(agentConfig.CommandArgs) > 0 {
 		args = append(args, agentConfig.CommandArgs...)
 	}

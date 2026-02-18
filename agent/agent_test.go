@@ -55,7 +55,7 @@ func TestBuildCommandArgs(t *testing.T) {
 
 	arguments := buildCommandArgs(agentConfig)
 
-	assert.Equal(t, len(arguments), 8)
+	assert.Equal(t, len(arguments), 9)
 	assert.ElementsMatch(t, []string{
 		agentConfig.CommandPath,
 		"-c",
@@ -65,6 +65,7 @@ func TestBuildCommandArgs(t *testing.T) {
 		"--drain-time-s",
 		strconv.Itoa(int(agentConfig.ListenerDrainWaitTime / time.Second)),
 		"--disable-hot-restart",
+		"--skip-deprecated-logs",
 	}, arguments)
 }
 
@@ -76,6 +77,7 @@ func TestBuildCommandArgsNoEnvoyParameters(t *testing.T) {
 	agentConfig.EnvoyLogLevel = ""
 	agentConfig.ListenerDrainWaitTime = 0
 	agentConfig.DisableHotRestart = false
+	agentConfig.SkipDeprecatedLogs = false
 
 	arguments := buildCommandArgs(agentConfig)
 
@@ -198,6 +200,7 @@ func TestKeepCommandAlive(t *testing.T) {
 	agentConfig.EnvoyLogLevel = ""
 	agentConfig.ListenerDrainWaitTime = 0
 	agentConfig.DisableHotRestart = false
+	agentConfig.SkipDeprecatedLogs = false
 	agentConfig.CommandPath, _ = exec.LookPath("sleep")
 	agentConfig.CommandArgs = []string{sleepTime.String()}
 
@@ -238,6 +241,7 @@ func TestKeepCommandAliveWithRestart(t *testing.T) {
 	agentConfig.EnvoyLogLevel = ""
 	agentConfig.ListenerDrainWaitTime = 0
 	agentConfig.DisableHotRestart = false
+	agentConfig.SkipDeprecatedLogs = false
 	agentConfig.EnvoyRestartCount = 2
 	agentConfig.CommandPath, _ = exec.LookPath("sleep")
 	agentConfig.CommandArgs = []string{"3"}
@@ -437,6 +441,7 @@ func TestLoggingToFileWithCommandExecution(t *testing.T) {
 	agentConfig.EnvoyLogLevel = ""
 	agentConfig.ListenerDrainWaitTime = 0
 	agentConfig.DisableHotRestart = false
+	agentConfig.SkipDeprecatedLogs = false
 	agentConfig.CommandPath, _ = exec.LookPath("echo")
 	agentConfig.CommandArgs = []string{
 		"this", "is", "my", "test.",

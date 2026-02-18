@@ -69,6 +69,7 @@ const (
 	ENVOY_CONCURRENCY_DEFAULT            = -1  // we will not set concurrency [envoy --concurrency] by default.
 	ENVOY_CONCURRENCY_FOR_RELAY_DEFAULT  = "1" // For relay we are defaulting it to 1
 	DISABLE_HOT_RESTART_DEFAULT          = true
+	SKIP_DEPRECATED_LOGS_DEFAULT         = true // Suppress deprecated warnings by default to reduce customer log noise
 
 	// agent relay mode
 	ENABLE_RELAY_MODE_FOR_XDS_DEFAULT      = false
@@ -162,6 +163,7 @@ type AgentConfig struct {
 	MaxLogFileSizeMB                float64
 	MaxLogCount                     int
 	DisableHotRestart               bool
+	SkipDeprecatedLogs              bool
 
 	XdsEndpointUdsPath string
 
@@ -519,6 +521,7 @@ func (config *AgentConfig) SetDefaults() {
 
 	config.EnvoyConcurrency = getEnvValueAsInt("ENVOY_CONCURRENCY", ENVOY_CONCURRENCY_DEFAULT)
 	config.DisableHotRestart = getEnvValueAsBool("DISABLE_HOT_RESTART", DISABLE_HOT_RESTART_DEFAULT)
+	config.SkipDeprecatedLogs = getEnvValueAsBool("ENVOY_SKIP_DEPRECATED_LOGS", SKIP_DEPRECATED_LOGS_DEFAULT)
 
 	validateEnvoyLogLevel(&config.EnvoyLogLevel)
 
