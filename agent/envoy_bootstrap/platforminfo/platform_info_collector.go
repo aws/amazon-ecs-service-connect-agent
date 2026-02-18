@@ -65,6 +65,7 @@ const (
 	AvailabilityZoneKey         = "AvailabilityZone"
 	AvailabilityZoneIDKey       = "AvailabilityZoneID"
 	supportedIPFamiliesKey      = "supportedIPFamilies"
+	fipsModeEnabledKey          = "fipsModeEnabled"
 	ec2MetadataTokenResource    = "/latest/api/token"
 	ec2ImdsTokenHeader          = "X-aws-ec2-metadata-token"
 	ec2ImdsTokenTtlHeader       = "X-aws-ec2-metadata-token-ttl-seconds"
@@ -185,6 +186,13 @@ func BuildMetadata() (*map[string]interface{}, error) {
 	buildMetadataForK8sPlatform(mapping)
 	buildMetadataForEcsPlatform(mapping)
 	buildMetadataFromSystemInfo(mapping)
+
+	if fipsModeEnabled, err := env.TruthyOrElse("APPNET_FIPS_MODE_ENABLED", false); err != nil {
+		log.Warnf("Could not parse value for APPNET_FIPS_MODE_ENABLED: %v", err)
+		return nil, err
+	} else if fipsModeEnabled {
+		mapping[fipsModeEnabledKey] = fipsModeEnabled
+	}
 
 	if len(mapping) != 0 {
 		md[metadataNamespace] = mapping

@@ -3156,3 +3156,94 @@ func TestRelayBootstrap_NotFipsCompatibleInIsoCloud(t *testing.T) {
 	v, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
 	assertError(t, v, e)
 }
+
+func TestBuildMetadataForNode_FipsModeEnabled_NotSet(t *testing.T) {
+	setup()
+	metadata, err := buildMetadataForNode()
+	assert.Nil(t, err)
+	// When APPNET_FIPS_MODE_ENABLED is not set or false, fipsModeEnabled should not be in metadata
+	if metadata != nil {
+		metadataMap := metadata.AsMap()
+		if platformInfo, exists := metadataMap["aws.appmesh.platformInfo"]; exists {
+			platformMap := platformInfo.(map[string]interface{})
+			_, fipsExists := platformMap["fipsModeEnabled"]
+			assert.False(t, fipsExists, "fipsModeEnabled should not exist when not set")
+		}
+	}
+}
+
+func TestBuildMetadataForNode_FipsModeEnabled_TruthyValues(t *testing.T) {
+	setup()
+	testCases := []struct {
+		value string
+	}{
+		{"1"},
+		{"true"},
+		{"TRUE"},
+	}
+
+	for _, tc := range testCases {
+		os.Setenv("APPNET_FIPS_MODE_ENABLED", tc.value)
+		metadata, err := buildMetadataForNode()
+		assert.Nil(t, err)
+
+		expectedYaml := `
+id: id
+cluster: cluster
+locality:
+  region: us-west-2
+  zone: use1-az1
+metadata:
+  aws.appmesh.platformInfo:
+    fipsModeEnabled: true
+`
+		checkMessageSupersetMatch(t, buildNode("id", "cluster", "us-west-2", "use1-az1", metadata), expectedYaml)
+		os.Unsetenv("APPNET_FIPS_MODE_ENABLED")
+	}
+}
+
+func TestBuildMetadataForNode_FipsModeEnabled_FalsyValues(t *testing.T) {
+	setup()
+	testCases := []struct {
+		value string
+	}{
+		{"0"},
+		{"false"},
+		{"FALSE"},
+	}
+
+	for _, tc := range testCases {
+		os.Setenv("APPNET_FIPS_MODE_ENABLED", tc.value)
+		metadata, err := buildMetadataForNode()
+		assert.Nil(t, err)
+
+		// When false, fipsModeEnabled should not be in metadata
+		if metadata != nil {
+			metadataMap := metadata.AsMap()
+			if platformInfo, exists := metadataMap["aws.appmesh.platformInfo"]; exists {
+				platformMap := platformInfo.(map[string]interface{})
+				_, fipsExists := platformMap["fipsModeEnabled"]
+				assert.False(t, fipsExists, "fipsModeEnabled should not exist when false")
+			}
+		}
+		os.Unsetenv("APPNET_FIPS_MODE_ENABLED")
+	}
+}
+
+func TestBuildMetadataForNode_FipsModeEnabled_InvalidValue(t *testing.T) {
+	setup()
+	os.Setenv("APPNET_FIPS_MODE_ENABLED", "invalid")
+	defer os.Unsetenv("APPNET_FIPS_MODE_ENABLED")
+	metadata, err := buildMetadataForNode()
+	// The function should still succeed but the platformInfo should not contain fipsModeEnabled
+	assert.Nil(t, err)
+	// Check that the metadata doesn't contain the platformInfo with fipsModeEnabled
+	if metadata != nil {
+		metadataMap := metadata.AsMap()
+		if platformInfo, exists := metadataMap["aws.appmesh.platformInfo"]; exists {
+			platformMap := platformInfo.(map[string]interface{})
+			_, fipsExists := platformMap["fipsModeEnabled"]
+			assert.False(t, fipsExists, "fipsModeEnabled should not exist when invalid value is provided")
+		}
+	}
+}
