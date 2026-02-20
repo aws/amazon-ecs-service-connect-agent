@@ -332,4 +332,3 @@ func TestSkipDeprecatedLogsInvalidValue(t *testing.T) {
 	agentConfig.SetDefaults()
 	assert.True(t, agentConfig.SkipDeprecatedLogs) // Should fall back to default (true)
 }
-	

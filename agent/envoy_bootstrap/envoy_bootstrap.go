@@ -495,15 +495,19 @@ func buildAdmin(agentConfig config.AgentConfig) (*boot.Admin, error) {
 	}
 }
 
-func buildNode(id string, cluster string, region string, zone string, metadata *structpb.Struct) *core.Node {
+func buildNode(id string, cluster string, metadata *structpb.Struct) *core.Node {
 	node := &core.Node{
 		Id:       id,
 		Cluster:  cluster,
 		Metadata: metadata,
 	}
 
-	if zone != "" && region != "" {
-		node.Locality = &core.Locality{Zone: zone, Region: region}
+	zone := platforminfo.GetZoneId(metadata)
+	if zone != "" {
+		region, err := getRegion()
+		if err == nil && region != "" {
+			node.Locality = &core.Locality{Zone: zone, Region: region}
+		}
 	}
 	return node
 }
@@ -1496,18 +1500,19 @@ func bootstrap(agentConfig config.AgentConfig, fileUtil FileUtil, envoyCLIInst E
 		return nil, err
 	}
 
-	region, err := getRegion()
-	if err != nil {
-		return nil, err
-	}
-
 	var dr *boot.Bootstrap_DynamicResources
+	var region string
 	if agentConfig.XdsEndpointUdsPath != "" {
 		dr, err = buildDynamicResourcesForRelayEndpoint(agentConfig.XdsEndpointUdsPath)
 		if err != nil {
 			return nil, err
 		}
 	} else {
+		region, err = getRegion()
+		if err != nil {
+			return nil, err
+		}
+
 		xdsEndpoint, err := getRegionalXdsEndpoint(region, envoyCLIInst)
 		if err != nil || xdsEndpoint == nil {
 			return nil, err
@@ -1534,12 +1539,11 @@ func bootstrap(agentConfig config.AgentConfig, fileUtil FileUtil, envoyCLIInst E
 		return nil, err
 	}
 
-	zone := platforminfo.GetZoneId(metadata)
 	isServiceConnect := agentConfig.XdsEndpointUdsPath != ""
 
 	b := &boot.Bootstrap{
 		Admin:            admin,
-		Node:             buildNode(id, clusterId, region, zone, metadata),
+		Node:             buildNode(id, clusterId, metadata),
 		LayeredRuntime:   lr,
 		DynamicResources: dr,
 		ClusterManager:   buildClusterManager(isServiceConnect),
