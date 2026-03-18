@@ -7,6 +7,8 @@ The Amazon ECS Service Connect Agent is a primary component of [Amazon ECS Servi
 
 ## Building the Agent
 
+### Option 1: Local build
+
 On an [Amazon Linux AMI](https://aws.amazon.com/amazon-linux-ami/). Download Go at https://go.dev/doc/install. In the project's `agent` directory, issue the `make` command to compile the agent binary:
 
 ```
@@ -18,6 +20,21 @@ go test -mod=vendor -count=1 -v ./...
 ...
 $ ls -laF agent
 -rwxrwxr-x 1 ec2-user ec2-user 21192704 Feb  1 18:40 agent*
+```
+
+### Option 2: Docker build
+
+If you'd rather not install Go and build dependencies locally, you can build entirely in Docker. In the project's `agent` directory:
+
+```
+$ ./docker-build.sh
+```
+
+You can also run individual make targets:
+
+```
+$ ./docker-build.sh test       # run tests only
+$ ./docker-build.sh go-build   # compile only
 ```
 
 
