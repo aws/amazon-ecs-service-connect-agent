@@ -31,7 +31,8 @@ import (
 )
 
 const (
-	QUERY_KEY = "level"
+	QUERY_KEY           = "level"
+	QUERY_KEY_PERMANENT = "permanent"
 )
 
 type EnvoyLoggingHandler struct {
@@ -128,7 +129,12 @@ func (envoyHandler *EnvoyLoggingHandler) validateEnableLoggingRequest() bool {
 	queryParameterCount := len(values)
 	log.Debugf("Query Values: %v", values)
 
-	if queryParameterCount != 1 || values.Get(QUERY_KEY) == "" {
+	hasPermanent := values.Get(QUERY_KEY_PERMANENT) != ""
+	expectedCount := 1
+	if hasPermanent {
+		expectedCount = 2
+	}
+	if queryParameterCount != expectedCount || values.Get(QUERY_KEY) == "" {
 		log.Debugf("Unexpected query parameters specified in request [%v]",
 			values)
 		http.Error(*envoyHandler.response, "Invalid request", http.StatusBadRequest)
@@ -216,9 +222,15 @@ func (envoyHandler *EnvoyLoggingHandler) LoggingHandler(response http.ResponseWr
 
 		response.WriteHeader(http.StatusOK)
 
-		// TOOD: Need to cancel the reset if the process restarts after
-		// 		   the loglevel has changed.
-		envoyHandler.resetLogLevel()
+		if envoyHandler.queryParameters.Get(QUERY_KEY_PERMANENT) == "true" {
+			// Update the snapshot level so the reset timer targets the new level,
+			// and subsequent requests treat it as the baseline.
+			envoyHandler.AgentConfig.EnvoyLogLevel = logLevel
+		} else {
+			// TOOD: Need to cancel the reset if the process restarts after
+			// 		   the loglevel has changed.
+			envoyHandler.resetLogLevel()
+		}
 	}
 
 	log.Debug(responseBody)
