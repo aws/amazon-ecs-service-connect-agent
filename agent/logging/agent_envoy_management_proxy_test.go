@@ -27,7 +27,6 @@ import (
 	"github.com/aws/aws-app-mesh-agent/agent/internal/netlistenertest"
 
 	mux "github.com/gorilla/mux"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	rate "golang.org/x/time/rate"
 )
@@ -153,6 +152,88 @@ func TestEnvoyLoggingLevelPostWithReservedCharacters(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
 }
 
+func TestEnvoyLoggingLevelPostWithUnknownExtraParameter(t *testing.T) {
+	var agentConfig config.AgentConfig
+	agentConfig.SetDefaults()
+
+	envoyHandler := buildHandler(&agentConfig)
+	srv := httptest.NewServer(http.HandlerFunc(envoyHandler.LoggingHandler))
+	defer srv.Close()
+
+	res, err := http.Post(fmt.Sprintf("%s?level=debug&unknown=true", srv.URL), "", nil)
+	assert.Nil(t, err)
+	assert.NotNil(t, res)
+	defer res.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+}
+
+func TestEnvoyLoggingLevelResetBehavior(t *testing.T) {
+	tests := []struct {
+		name                  string
+		permanentParam        string
+		expectReset           bool
+		expectedReRequestCode int
+	}{
+		{"resets after timeout without permanent flag", "", true, http.StatusOK},
+		{"no reset with permanent=true", "&permanent=true", false, http.StatusNotModified},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			os.Setenv("APPNET_AGENT_LOGGING_RESET_TIMEOUT", "2")
+			defer os.Unsetenv("APPNET_AGENT_LOGGING_RESET_TIMEOUT")
+			os.Setenv("ENVOY_ADMIN_MODE", "tcp")
+			defer os.Unsetenv("ENVOY_ADMIN_MODE")
+
+			var agentConfig config.AgentConfig
+			agentConfig.SetDefaults()
+			agentConfig.EnvoyLogLevel = "trace"
+
+			var debugTimestamp, resetTimestamp time.Time
+			resetCalled := false
+
+			agentURL, cleanup := setupLoggingTestServers(t, &agentConfig,
+				func(w http.ResponseWriter, r *http.Request) {
+					switch r.URL.Query().Get("level") {
+					case "debug":
+						debugTimestamp = time.Now()
+						io.WriteString(w, "active loggers:\n\tadmin: debug\n")
+					case "trace":
+						resetTimestamp = time.Now()
+						resetCalled = true
+						io.WriteString(w, "active loggers:\n\tadmin: trace\n")
+					default:
+						http.Error(w, "unexpected level", http.StatusBadRequest)
+					}
+				})
+			defer cleanup()
+
+			url := fmt.Sprintf("%s%s?level=debug%s", agentURL, config.AGENT_LOGGING_ENDPOINT_URL, tc.permanentParam)
+
+			res, err := http.Post(url, "", nil)
+			assert.Nil(t, err)
+			assert.Equal(t, http.StatusOK, res.StatusCode)
+
+			// A second request while a reset is pending should be a no-op
+			if tc.permanentParam == "" {
+				res, err = http.Post(url, "", nil)
+				assert.Nil(t, err)
+				assert.Equal(t, http.StatusNotModified, res.StatusCode)
+			}
+
+			time.Sleep(5 * time.Second)
+
+			assert.Equal(t, tc.expectReset, resetCalled)
+			if tc.expectReset {
+				assert.GreaterOrEqual(t, resetTimestamp.Sub(debugTimestamp), 2*time.Second)
+			}
+			res, err = http.Post(url, "", nil)
+			assert.Nil(t, err)
+			assert.Equal(t, tc.expectedReRequestCode, res.StatusCode)
+		})
+	}
+}
+
 func setupAndStartServerListener(t *testing.T, handler http.Handler, ctx *netlistenertest.ListenContext) *httptest.Server {
 	server := httptest.NewUnstartedServer(handler)
 
@@ -165,192 +246,29 @@ func setupAndStartServerListener(t *testing.T, handler http.Handler, ctx *netlis
 	return server
 }
 
-func TestEnvoyLoggingLevelChange(t *testing.T) {
-	os.Setenv("ENVOY_ADMIN_MODE", "tcp")
-	defer os.Unsetenv("ENVOY_ADMIN_MODE")
-
-	var agentConfig config.AgentConfig
-
-	var envoyCtx netlistenertest.ListenContext
-	var agentCtx netlistenertest.ListenContext
-
-	agentConfig.SetDefaults()
-	err := agentCtx.GetPortListener()
-	assert.Nil(t, err)
-	agentConfig.AgentHttpPort = agentCtx.Port
-
-	err = envoyCtx.CreateEnvoyAdminListener(&agentConfig)
-	assert.Nil(t, err)
-
-	defer envoyCtx.Close()
-	defer agentCtx.Close()
-
-	// =========================== Envoy Management Setup ===========================
-	envoyRouter := mux.NewRouter()
-
-	// Using a subset of the modules here for brevity
-	logErrorResponse := `
-active loggers:
-	admin: error
-	aws: error
-	assert: error
-	backtrace: error
-	cache_filter: error
-	client: error
-	`
-	envoyRouter.HandleFunc(agentConfig.EnvoyLoggingUrl,
-		func(w http.ResponseWriter, r *http.Request) {
-			// if there's a query parmeter where the level is debug return the debug reponse
-			if r.URL.Query().Get("level") == "error" {
-				io.WriteString(w, logErrorResponse)
-				return
-			}
-			http.Error(w, "Invalid request for test", http.StatusBadRequest)
-		})
-
-	envoyManagmentServer := setupAndStartServerListener(
-		t, envoyRouter, &envoyCtx)
-
-	defer envoyManagmentServer.Close()
-
-	// =========================== Agent Listener Setup ===========================
-
-	agentRouter := mux.NewRouter()
-
-	// Setup the Envoy logging handler
-	envoyHandler := buildHandler(&agentConfig)
-	agentRouter.HandleFunc(config.AGENT_LOGGING_ENDPOINT_URL, envoyHandler.LoggingHandler)
-
-	agentHttpServer := setupAndStartServerListener(
-		t, agentRouter, &agentCtx)
-	defer agentHttpServer.Close()
-
-	// Make a request to the agent to set the level.  If we get back a 200
-	// It indicates we are successfully able to POST to Envoy and confirm we
-	// updated the logging level
-	url := fmt.Sprintf("%s%s?level=%s",
-		agentHttpServer.URL, config.AGENT_LOGGING_ENDPOINT_URL, "error")
-
-	log.Debugf("Using test url for agent [%s]\n", url)
-	res, err := http.Post(url, "", nil)
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusOK, res.StatusCode)
-}
-
-func TestEnvoyLoggingLevelReset(t *testing.T) {
-	os.Setenv("APPNET_AGENT_LOGGING_RESET_TIMEOUT", "2")
-	defer os.Unsetenv("APPNET_AGENT_LOGGING_RESET_TIMEOUT")
-	os.Setenv("ENVOY_ADMIN_MODE", "tcp")
-	defer os.Unsetenv("ENVOY_ADMIN_MODE")
-
-	var agentConfig config.AgentConfig
-	agentConfig.SetDefaults()
-
-	var envoyCtx netlistenertest.ListenContext
-	var agentCtx netlistenertest.ListenContext
+func setupLoggingTestServers(t *testing.T, agentConfig *config.AgentConfig, envoyHandler func(http.ResponseWriter, *http.Request)) (agentBaseURL string, cleanup func()) {
+	var envoyCtx, agentCtx netlistenertest.ListenContext
 
 	err := agentCtx.GetPortListener()
 	assert.Nil(t, err)
 	agentConfig.AgentHttpPort = agentCtx.Port
 
-	err = envoyCtx.CreateEnvoyAdminListener(&agentConfig)
+	err = envoyCtx.CreateEnvoyAdminListener(agentConfig)
 	assert.Nil(t, err)
 
-	defer envoyCtx.Close()
-	defer agentCtx.Close()
-
-	agentConfig.EnvoyLogLevel = "trace"
-
-	// =========================== Envoy Management Setup ===========================
 	envoyRouter := mux.NewRouter()
-
-	// Using a subset of the modules here for brevity
-	logTraceResponse := `
-active loggers:
-	admin: trace
-	aws: trace
-	assert: trace
-	backtrace: trace
-	cache_filter: trace
-	client: trace
-	`
-
-	logDebugResponse := `
-active loggers:
-	admin: debug
-	aws: debug
-	assert: debug
-	backtrace: debug
-	cache_filter: debug
-	client: debug
-	`
-
-	debugLevelSet := false
-	var debugTimeStamp time.Time = time.Now()
-	traceLevelSet := false
-	var traceTimeStamp time.Time = time.Now()
-
-	envoyRouter.HandleFunc(agentConfig.EnvoyLoggingUrl,
-		func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Query().Get("level") == "debug" {
-				w.WriteHeader(http.StatusOK)
-				io.WriteString(w, logDebugResponse)
-				debugLevelSet = true
-				debugTimeStamp = time.Now()
-				return
-			}
-
-			if r.URL.Query().Get("level") == "trace" {
-				w.WriteHeader(http.StatusOK)
-				io.WriteString(w, logTraceResponse)
-				traceLevelSet = true
-				traceTimeStamp = time.Now()
-				return
-			}
-
-			http.Error(w, "Invalid request for test", http.StatusBadRequest)
-		})
-
-	envoyManagmentServer := setupAndStartServerListener(
-		t, envoyRouter, &envoyCtx)
-	defer envoyManagmentServer.Close()
-
-	// =========================== Agent Listener Setup ===========================
+	envoyRouter.HandleFunc(agentConfig.EnvoyLoggingUrl, envoyHandler)
+	envoyServer := setupAndStartServerListener(t, envoyRouter, &envoyCtx)
 
 	agentRouter := mux.NewRouter()
+	handler := buildHandler(agentConfig)
+	agentRouter.HandleFunc(config.AGENT_LOGGING_ENDPOINT_URL, handler.LoggingHandler)
+	agentServer := setupAndStartServerListener(t, agentRouter, &agentCtx)
 
-	// Setup the Envoy logging handler
-	envoyHandler := buildHandler(&agentConfig)
-	agentRouter.HandleFunc(config.AGENT_LOGGING_ENDPOINT_URL, envoyHandler.LoggingHandler)
-
-	agentHttpServer := setupAndStartServerListener(
-		t, agentRouter, &agentCtx)
-	defer agentHttpServer.Close()
-
-	// Make a request to the agent to set the level.  We get back a 200
-	// indicating we are successfully able to POST to Envoy and confirm
-	// the logging level
-	url := fmt.Sprintf("%s%s?level=%s",
-		agentHttpServer.URL, config.AGENT_LOGGING_ENDPOINT_URL, "debug")
-
-	log.Debugf("Using test url for agent [%s]\n", url)
-
-	// Set the log level to debug
-	res, err := http.Post(url, "", nil)
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusOK, res.StatusCode)
-	assert.True(t, debugLevelSet)
-
-	// Try changing the log level again.  We should get back a 304
-	res, err = http.Post(url, "", nil)
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusNotModified, res.StatusCode)
-
-	// Allow the goroutine to execute.  It's configured for 2 seconds
-	time.Sleep(5 * time.Second)
-
-	// Verify that our test server was called to reset the log level to trace
-	delta := traceTimeStamp.Sub(debugTimeStamp)
-	assert.True(t, traceLevelSet)
-	assert.GreaterOrEqual(t, delta, int64(2))
+	return agentServer.URL, func() {
+		envoyServer.Close()
+		agentServer.Close()
+		envoyCtx.Close()
+		agentCtx.Close()
+	}
 }
