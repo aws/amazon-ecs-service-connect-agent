@@ -69,17 +69,20 @@ var (
 )
 
 const (
-	runtimeMetadataNamespace    = "aws.appmesh.static_runtime"
-	staticResourcesKey          = "staticResources"
-	tracingKey                  = "tracing"
-	statsConfigKey              = "statsConfig"
-	statsSinksKey               = "statsSinks"
-	GRPC_MAX_PINGS_WITHOUT_DATA = 0
-	GRPC_KEEPALIVE_TIME_MS      = 10000
-	GRPC_KEEPALIVE_TIMEOUT_MS   = 20000
-	listenerProtocolRegex       = ".*?\\.ingress\\.((\\w+?)\\.)[0-9]+?\\.(.+?)$"
-	listenerPortRegex           = ".*?\\.ingress\\.\\w+?\\.(([0-9]+?)\\.)(.+?)$"
-	envoyRdsRouteConf           = ".*?\\.ingress\\.\\w+?\\.[0-9]+?\\.rds\\.((.*?)\\.)(.+?)$"
+	runtimeMetadataNamespace         = "aws.appmesh.static_runtime"
+	staticResourcesKey               = "staticResources"
+	tracingKey                       = "tracing"
+	statsConfigKey                   = "statsConfig"
+	statsSinksKey                    = "statsSinks"
+	GRPC_MAX_PINGS_WITHOUT_DATA      = 0
+	GRPC_KEEPALIVE_TIME_MS           = 10000
+	GRPC_KEEPALIVE_TIMEOUT_MS        = 20000
+	GRPC_INITIAL_BACKOFF_MS          = 10000
+	GRPC_MAX_CONNECTION_AGE_MS       = 2400000 // Set to 40 mins to be roughly equal to the interval at which connection between EMS and relay is reset
+	GRPC_MAX_CONNECTION_AGE_GRACE_MS = 5000
+	listenerProtocolRegex            = ".*?\\.ingress\\.((\\w+?)\\.)[0-9]+?\\.(.+?)$"
+	listenerPortRegex                = ".*?\\.ingress\\.\\w+?\\.(([0-9]+?)\\.)(.+?)$"
+	envoyRdsRouteConf                = ".*?\\.ingress\\.\\w+?\\.[0-9]+?\\.rds\\.((.*?)\\.)(.+?)$"
 )
 
 type EnvoyCLI interface {
@@ -493,11 +496,20 @@ func buildAdmin(agentConfig config.AgentConfig) (*boot.Admin, error) {
 }
 
 func buildNode(id string, cluster string, metadata *structpb.Struct) *core.Node {
-	return &core.Node{
+	node := &core.Node{
 		Id:       id,
 		Cluster:  cluster,
 		Metadata: metadata,
 	}
+
+	zone := platforminfo.GetZoneId(metadata)
+	if zone != "" {
+		region, err := getRegion()
+		if err == nil && region != "" {
+			node.Locality = &core.Locality{Zone: zone, Region: region}
+		}
+	}
+	return node
 }
 
 func generateStaticRuntimeLayer(s *structpb.Struct) *boot.RuntimeLayer {
@@ -536,13 +548,17 @@ func buildLayeredRuntime() (*boot.LayeredRuntime, error) {
 	}, nil
 }
 
-func buildClusterManager() *boot.ClusterManager {
+func buildClusterManager(isServiceConnect bool) *boot.ClusterManager {
 	logPath := env.Or("ENVOY_OUTLIER_DETECTION_EVENT_LOG_PATH", "/dev/stdout")
-	return &boot.ClusterManager{
+	clusterManager := &boot.ClusterManager{
 		OutlierDetection: &boot.ClusterManager_OutlierDetection{
 			EventLogPath: logPath,
 		},
 	}
+	if isServiceConnect {
+		clusterManager.LocalClusterName = config.ENVOY_LOCAL_CLUSTER_NAME
+	}
+	return clusterManager
 }
 
 func buildFileDataSource(filename string) *core.DataSource {
@@ -567,6 +583,9 @@ func buildAdsGrpcServiceForRelayEndpoint(endpoint string) (*core.GrpcService, er
 			"grpc.http2.max_pings_without_data": buildGoogleGrpcIntChannelArg(GRPC_MAX_PINGS_WITHOUT_DATA),
 			"grpc.keepalive_time_ms":            buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIME_MS),
 			"grpc.keepalive_timeout_ms":         buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIMEOUT_MS),
+			"grpc.initial_reconnect_backoff_ms": buildGoogleGrpcIntChannelArg(GRPC_INITIAL_BACKOFF_MS),
+			"grpc.max_connection_age_ms":        buildGoogleGrpcIntChannelArg(GRPC_MAX_CONNECTION_AGE_MS),
+			"grpc.max_connection_age_grace_ms":  buildGoogleGrpcIntChannelArg(GRPC_MAX_CONNECTION_AGE_GRACE_MS),
 		},
 	}
 	return &core.GrpcService{
@@ -586,6 +605,9 @@ func buildRegionalAdsGrpcService(endpoint string, region string, signingName str
 			"grpc.http2.max_pings_without_data": buildGoogleGrpcIntChannelArg(GRPC_MAX_PINGS_WITHOUT_DATA),
 			"grpc.keepalive_time_ms":            buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIME_MS),
 			"grpc.keepalive_timeout_ms":         buildGoogleGrpcIntChannelArg(GRPC_KEEPALIVE_TIMEOUT_MS),
+			"grpc.initial_reconnect_backoff_ms": buildGoogleGrpcIntChannelArg(GRPC_INITIAL_BACKOFF_MS),
+			"grpc.max_connection_age_ms":        buildGoogleGrpcIntChannelArg(GRPC_MAX_CONNECTION_AGE_MS),
+			"grpc.max_connection_age_grace_ms":  buildGoogleGrpcIntChannelArg(GRPC_MAX_CONNECTION_AGE_GRACE_MS),
 		},
 	}
 	iamConfig, err := anypb.New(&grpc_cred.AwsIamConfig{
@@ -627,16 +649,9 @@ func buildRegionalAdsGrpcService(endpoint string, region string, signingName str
 }
 
 // Make the config source used to point things like LDS or CDS to ADS
-func buildAdsConfigSource() (*core.ConfigSource, error) {
-	// This timeout is in seconds
-	timeout, err := env.OrInt("ENVOY_INITIAL_FETCH_TIMEOUT", 0)
-	if err != nil {
-		return nil, err
-	}
+func buildAdsConfigSource(initialFetchTimeout *durationpb.Duration) (*core.ConfigSource, error) {
 	return &core.ConfigSource{
-		InitialFetchTimeout: &durationpb.Duration{
-			Seconds: int64(timeout),
-		},
+		InitialFetchTimeout: initialFetchTimeout,
 		ConfigSourceSpecifier: &core.ConfigSource_Ads{
 			Ads: &core.AggregatedConfigSource{},
 		},
@@ -661,7 +676,16 @@ func buildRegionalDynamicResources(endpoint string, region string, signingName s
 }
 
 func buildDynamicResources(ads *core.GrpcService) (*boot.Bootstrap_DynamicResources, error) {
-	configSource, err := buildAdsConfigSource()
+	// This timeout is in seconds
+	timeout, err := env.OrInt("ENVOY_INITIAL_FETCH_TIMEOUT", 0)
+	if err != nil {
+		return nil, err
+	}
+	initialFetchTimeout := &durationpb.Duration{
+		Seconds: int64(timeout),
+	}
+
+	configSource, err := buildAdsConfigSource(initialFetchTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -842,6 +866,34 @@ func appendXRayTracing(b *boot.Bootstrap, nodeId string, cluster string, fileUti
 				Name: "envoy.tracers.xray",
 				ConfigType: &trace.Tracing_Http_TypedConfig{
 					TypedConfig: packedCfg,
+				},
+			},
+		},
+	}
+	return mergeBootstrap(b, bt)
+}
+
+func appendStaticLocalCluster(b *boot.Bootstrap) error {
+	// for static local cluster, we set the timeout as the minimum,
+	// to not fail envoy which does not turn on zone aware routing
+	initialFetchTimeout := &durationpb.Duration{
+		Nanos: 1000000,
+	}
+	configSource, err := buildAdsConfigSource(initialFetchTimeout)
+	if err != nil {
+		return err
+	}
+	bt := &boot.Bootstrap{
+		StaticResources: &boot.Bootstrap_StaticResources{
+			Clusters: []*cluster.Cluster{
+				&cluster.Cluster{
+					Name: config.ENVOY_LOCAL_CLUSTER_NAME,
+					ClusterDiscoveryType: &cluster.Cluster_Type{
+						Type: cluster.Cluster_EDS,
+					},
+					EdsClusterConfig: &cluster.Cluster_EdsClusterConfig{
+						EdsConfig: configSource,
+					},
 				},
 			},
 		},
@@ -1449,13 +1501,14 @@ func bootstrap(agentConfig config.AgentConfig, fileUtil FileUtil, envoyCLIInst E
 	}
 
 	var dr *boot.Bootstrap_DynamicResources
+	var region string
 	if agentConfig.XdsEndpointUdsPath != "" {
 		dr, err = buildDynamicResourcesForRelayEndpoint(agentConfig.XdsEndpointUdsPath)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		region, err := getRegion()
+		region, err = getRegion()
 		if err != nil {
 			return nil, err
 		}
@@ -1486,12 +1539,19 @@ func bootstrap(agentConfig config.AgentConfig, fileUtil FileUtil, envoyCLIInst E
 		return nil, err
 	}
 
+	isServiceConnect := agentConfig.XdsEndpointUdsPath != ""
+
 	b := &boot.Bootstrap{
 		Admin:            admin,
 		Node:             buildNode(id, clusterId, metadata),
 		LayeredRuntime:   lr,
 		DynamicResources: dr,
-		ClusterManager:   buildClusterManager(),
+		ClusterManager:   buildClusterManager(isServiceConnect),
+	}
+
+	// append Static cluster for service connect only
+	if isServiceConnect {
+		appendStaticLocalCluster(b)
 	}
 
 	// Tracing

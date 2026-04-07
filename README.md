@@ -7,6 +7,8 @@ The Amazon ECS Service Connect Agent is a primary component of [Amazon ECS Servi
 
 ## Building the Agent
 
+### Option 1: Local build
+
 On an [Amazon Linux AMI](https://aws.amazon.com/amazon-linux-ami/). Download Go at https://go.dev/doc/install. In the project's `agent` directory, issue the `make` command to compile the agent binary:
 
 ```
@@ -18,6 +20,21 @@ go test -mod=vendor -count=1 -v ./...
 ...
 $ ls -laF agent
 -rwxrwxr-x 1 ec2-user ec2-user 21192704 Feb  1 18:40 agent*
+```
+
+### Option 2: Docker build
+
+If you'd rather not install Go and build dependencies locally, you can build entirely in Docker. In the project's `agent` directory:
+
+```
+$ ./docker-build.sh
+```
+
+You can also run individual make targets:
+
+```
+$ ./docker-build.sh test       # run tests only
+$ ./docker-build.sh go-build   # compile only
 ```
 
 
@@ -85,6 +102,7 @@ These environment variables offer controls for the bootstrap config generation f
 |`ENVOY_INITIAL_FETCH_TIMEOUT`	|	|Length of time Envoy will wait for an initial config response	|0	|
 |`ENVOY_CONCURRENCY`  | 2 | number of concurrent processes for Envoy |-1 |
 |`ENABLE_ENVOY_STATS_TAGS`	|<0 &#124; 1>	|Enables the use of App Mesh defined tags `appmesh.mesh` and `appmesh.virtual_node`. For more information, see [config.metrics.v3.TagSpecifier](https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/metrics/v3/stats.proto#config-metrics-v3-tagspecifier) in the Envoy documentation. To enable, set the value to 1. |   |
+|`ENVOY_SKIP_DEPRECATED_LOGS`	|<true &#124; false>	|Suppresses Envoy deprecated field warning logs. Enabled by default. Set to `false` to see deprecation warnings	|true	|
 |`ENVOY_STATS_FLUSH_INTERVAL`  | 5000ms | Sets optional duration between flushes to configured stats sinks. (unit: Duration) | 5000ms |
 |`ENVOY_STATS_CONFIG_FILE`	|	|Stats config file (see: https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/observability/statistics).	|	|
 |`ENVOY_STATS_SINKS_CFG_FILE`	|	|Specify a file path in the Envoy container file system to override the default configuration with your own. For more information, see [config.metrics.v3.StatsSink](https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/metrics/v3/stats.proto#config-metrics-v3-statssink) in the Envoy documentation.	|	|
@@ -171,6 +189,7 @@ These environment variables are used to pass operating platform/environment info
 |`APPMESH_PLATFORM_K8S_POD_UID`  | `arn:aws:ecs:region:aws_account_id:container-instance/cluster-name/container-instance-id` | For Envoy running on K8s, Pod UID injected by App Mesh Controller. |  |
 |`APPNET_CONTAINER_IP_MAPPING`  | `{"App1":"172.10.1.1","App2":"172.10.1.2"}` | Specifies address mapping of application container as set by ECS agent in ECS Service Connect. |  |
 |`APPNET_LISTENER_PORT_MAPPING`  | `{"Listener1":15000,"Listener2":15001}` | Specifies port mapping for each application port as set by ECS agent in ECS Service Connect. |  |
+|`APPNET_FIPS_MODE_ENABLED`  | <0 &#124; 1 &#124; true &#124; false> | Indicates whether FIPS mode is enabled for the platform. Accepts truthy values (1, true, TRUE) or falsy values (0, false, FALSE). | false |
 
 ### Deprecated
 

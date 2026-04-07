@@ -34,6 +34,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -619,6 +620,26 @@ address:
 
 func TestBuildNode(t *testing.T) {
 	setup()
+	os.Setenv("AWS_REGION", "us-west-2")
+	metadata, _ := structpb.NewStruct(map[string]interface{}{
+		"aws.appmesh.platformInfo": map[string]interface{}{
+			"AvailabilityZoneID": "use1-az1",
+		},
+	})
+	checkMessage(t, buildNode("id", "cluster", metadata), `
+id: id
+cluster: cluster
+locality:
+  region: us-west-2
+  zone: use1-az1
+metadata:
+  aws.appmesh.platformInfo:
+    AvailabilityZoneID: use1-az1
+`)
+}
+
+func TestBuildNodeWithEmptyZone(t *testing.T) {
+	setup()
 	metadata := structpb.NewNullValue().GetStructValue()
 	checkMessage(t, buildNode("id", "cluster", metadata), `
 id: id
@@ -838,7 +859,16 @@ layers:
 
 func TestBuildClusterManager(t *testing.T) {
 	setup()
-	checkMessage(t, buildClusterManager(), `
+	checkMessage(t, buildClusterManager(true), `
+outlierDetection:
+  eventLogPath: /dev/stdout
+localClusterName: `+config.ENVOY_LOCAL_CLUSTER_NAME+`
+`)
+}
+
+func TestBuildClusterManager_noServiceConnect(t *testing.T) {
+	setup()
+	checkMessage(t, buildClusterManager(false), `
 outlierDetection:
   eventLogPath: /dev/stdout
 `)
@@ -847,9 +877,10 @@ outlierDetection:
 func TestBuildClusterManager_CustomOutlierDetection(t *testing.T) {
 	setup()
 	os.Setenv("ENVOY_OUTLIER_DETECTION_EVENT_LOG_PATH", "/custom/path")
-	checkMessage(t, buildClusterManager(), `
+	checkMessage(t, buildClusterManager(true), `
 outlierDetection:
   eventLogPath: /custom/path
+localClusterName: `+config.ENVOY_LOCAL_CLUSTER_NAME+`
 `)
 }
 
@@ -891,6 +922,9 @@ adsConfig:
           grpc.http2.max_pings_without_data: { intValue: "0" }
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
+          grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
@@ -923,6 +957,9 @@ adsConfig:
           grpc.http2.max_pings_without_data: { intValue: "0" }
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
+          grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
@@ -971,6 +1008,9 @@ adsConfig:
           grpc.http2.max_pings_without_data: { intValue: "0" }
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
+          grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
@@ -1016,6 +1056,9 @@ adsConfig:
           grpc.http2.max_pings_without_data: { intValue: "0" }
           grpc.keepalive_time_ms: { intValue: "10000" }
           grpc.keepalive_timeout_ms: { intValue: "20000" }
+          grpc.initial_reconnect_backoff_ms: { intValue: "10000" }
+          grpc.max_connection_age_ms: { intValue: "2400000" }
+          grpc.max_connection_age_grace_ms: { intValue: "5000" }
 
 cdsConfig:
   ads: {}
@@ -1626,6 +1669,52 @@ tracing:
       collectorEndpoint: /api/v2/spans
       collectorEndpointVersion: HTTP_JSON
       sharedSpanContext: false
+`)
+}
+
+func TestAppendStaticLocalCluster(t *testing.T) {
+	setup()
+	b := &boot.Bootstrap{}
+	err := appendStaticLocalCluster(b)
+	if err != nil {
+		t.Error(err)
+	}
+	checkMessage(t, b, `
+staticResources:
+  clusters:
+    - name: `+config.ENVOY_LOCAL_CLUSTER_NAME+`
+      type: EDS
+      edsClusterConfig:
+        edsConfig:
+          ads: {}
+          initialFetchTimeout: 0.001s
+          resourceApiVersion: V3
+`)
+}
+
+func TestBuildAdsConfigSource(t *testing.T) {
+	setup()
+	timeout := &durationpb.Duration{Seconds: 30}
+	configSource, err := buildAdsConfigSource(timeout)
+	if err != nil {
+		t.Error(err)
+	}
+	checkMessage(t, configSource, `
+initialFetchTimeout: 30s
+ads: {}
+resourceApiVersion: V3
+`)
+}
+
+func TestBuildAdsConfigSourceWithNilTimeout(t *testing.T) {
+	setup()
+	configSource, err := buildAdsConfigSource(nil)
+	if err != nil {
+		t.Error(err)
+	}
+	checkMessage(t, configSource, `
+ads: {}
+resourceApiVersion: V3
 `)
 }
 
@@ -3053,4 +3142,92 @@ func TestRelayBootstrap_NotFipsCompatibleInIsoCloud(t *testing.T) {
 	mockEnvoyCLI := newMockEnvoyCLI("BoringSSL", nil)
 	v, e := GetRelayBootstrapYaml(agentConfig, mockFileUtil, mockEnvoyCLI)
 	assertError(t, v, e)
+}
+
+func TestBuildMetadataForNode_FipsModeEnabled_NotSet(t *testing.T) {
+	setup()
+	metadata, err := buildMetadataForNode()
+	assert.Nil(t, err)
+	// When APPNET_FIPS_MODE_ENABLED is not set or false, fipsModeEnabled should not be in metadata
+	if metadata != nil {
+		metadataMap := metadata.AsMap()
+		if platformInfo, exists := metadataMap["aws.appmesh.platformInfo"]; exists {
+			platformMap := platformInfo.(map[string]interface{})
+			_, fipsExists := platformMap["fipsModeEnabled"]
+			assert.False(t, fipsExists, "fipsModeEnabled should not exist when not set")
+		}
+	}
+}
+
+func TestBuildMetadataForNode_FipsModeEnabled_TruthyValues(t *testing.T) {
+	setup()
+	testCases := []struct {
+		value string
+	}{
+		{"1"},
+		{"true"},
+		{"TRUE"},
+	}
+
+	for _, tc := range testCases {
+		os.Setenv("APPNET_FIPS_MODE_ENABLED", tc.value)
+		metadata, err := buildMetadataForNode()
+		assert.Nil(t, err)
+
+		expectedYaml := `
+id: id
+cluster: cluster
+metadata:
+  aws.appmesh.platformInfo:
+    fipsModeEnabled: true
+`
+		checkMessageSupersetMatch(t, buildNode("id", "cluster", metadata), expectedYaml)
+		os.Unsetenv("APPNET_FIPS_MODE_ENABLED")
+	}
+}
+
+func TestBuildMetadataForNode_FipsModeEnabled_FalsyValues(t *testing.T) {
+	setup()
+	testCases := []struct {
+		value string
+	}{
+		{"0"},
+		{"false"},
+		{"FALSE"},
+	}
+
+	for _, tc := range testCases {
+		os.Setenv("APPNET_FIPS_MODE_ENABLED", tc.value)
+		metadata, err := buildMetadataForNode()
+		assert.Nil(t, err)
+
+		// When false, fipsModeEnabled should not be in metadata
+		if metadata != nil {
+			metadataMap := metadata.AsMap()
+			if platformInfo, exists := metadataMap["aws.appmesh.platformInfo"]; exists {
+				platformMap := platformInfo.(map[string]interface{})
+				_, fipsExists := platformMap["fipsModeEnabled"]
+				assert.False(t, fipsExists, "fipsModeEnabled should not exist when false")
+			}
+		}
+		os.Unsetenv("APPNET_FIPS_MODE_ENABLED")
+	}
+}
+
+func TestBuildMetadataForNode_FipsModeEnabled_InvalidValue(t *testing.T) {
+	setup()
+	os.Setenv("APPNET_FIPS_MODE_ENABLED", "invalid")
+	defer os.Unsetenv("APPNET_FIPS_MODE_ENABLED")
+	metadata, err := buildMetadataForNode()
+	// The function should still succeed but the platformInfo should not contain fipsModeEnabled
+	assert.Nil(t, err)
+	// Check that the metadata doesn't contain the platformInfo with fipsModeEnabled
+	if metadata != nil {
+		metadataMap := metadata.AsMap()
+		if platformInfo, exists := metadataMap["aws.appmesh.platformInfo"]; exists {
+			platformMap := platformInfo.(map[string]interface{})
+			_, fipsExists := platformMap["fipsModeEnabled"]
+			assert.False(t, fipsExists, "fipsModeEnabled should not exist when invalid value is provided")
+		}
+	}
 }

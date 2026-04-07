@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func setup() {
@@ -113,11 +114,80 @@ func setupEcsMetadataServer() *httptest.Server {
 		res.Write([]byte(containerMetadataResponseNoNetworks))
 	})
 
-	containerMetadataResponseDefault := `{ "Cluster": "TestCluster", "TaskARN": "TestTask", "AvailabilityZone": "us-west-2d"}`
+	containerMetadataResponseDefault := `{ "Cluster": "TestCluster", "TaskARN": "TestTask", "AvailabilityZone": "us-west-2d", "AvailabilityZoneID": "usw2-az4"}`
 	mux.HandleFunc("/ecsmetadata/default/task", func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(http.StatusOK)
 		res.Write([]byte(containerMetadataResponseDefault))
 	})
+
+	containerMetadataResponseNoAZID := `{ "Cluster": "TestCluster", "TaskARN": "TestTask", "AvailabilityZone": "us-west-2d"}`
+	mux.HandleFunc("/ecsmetadata/noazid/task", func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(http.StatusOK)
+		res.Write([]byte(containerMetadataResponseNoAZID))
+	})
+	srv := httptest.NewServer(mux)
+	return srv
+}
+
+func setupEcsBridgeModeMetadataServer() *httptest.Server {
+	mux := http.NewServeMux()
+	containerEnvoyMetadataResponse := `{"Limits": {
+										"CPU": 5,
+										"Memory": 0.25}}`
+	mux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		writer.Write([]byte(containerEnvoyMetadataResponse))
+	})
+
+	// Bridge mode with CNI_PAUSE container having IPv4 only
+	containerMetadataResponseBridgeIpv4 := `{ "Cluster": "TestCluster", "TaskARN": "TestTask", "AvailabilityZone": "us-west-2d",
+	"Containers":[
+		{"Name": "pause", "Type": "CNI_PAUSE", "Networks": [{"NetworkMode": "bridge", "IPv4Addresses": ["172.17.0.8"]}]},
+		{"Name": "nginx-client", "Type": "NORMAL", "Networks": [{"NetworkMode": "container:7d6bba905ead9cbd5b4b0e733e6ba8fef8e655339dc2ea971bb527d0c102c0b2", "IPv4Addresses": [""]}]},
+		{"Name": "web-client", "Type": "NORMAL", "Networks": [{"NetworkMode": "container:7d6bba905ead9cbd5b4b0e733e6ba8fef8e655339dc2ea971bb527d0c102c0b2", "IPv4Addresses": [""]}]}
+	]}`
+	mux.HandleFunc("/ecsmetadata/bridge/ipv4/task", func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(http.StatusOK)
+		res.Write([]byte(containerMetadataResponseBridgeIpv4))
+	})
+
+	// Bridge mode with CNI_PAUSE container having both IPv4 and IPv6
+	containerMetadataResponseBridgeDual := `{ "Cluster": "TestCluster", "TaskARN": "TestTask", "AvailabilityZone": "us-west-2d",
+	"Containers":[
+		{"Name": "pause", "Type": "CNI_PAUSE", "Networks": [{"NetworkMode": "bridge", "IPv4Addresses": ["172.17.0.8"], "IPv6Addresses": ["2001:db8:1::242:ac11:8"]}]},
+		{"Name": "nginx-client", "Type": "NORMAL", "Networks": [{"NetworkMode": "container:7d6bba905ead9cbd5b4b0e733e6ba8fef8e655339dc2ea971bb527d0c102c0b2", "IPv4Addresses": [""]}]},
+		{"Name": "web-client", "Type": "NORMAL", "Networks": [{"NetworkMode": "container:7d6bba905ead9cbd5b4b0e733e6ba8fef8e655339dc2ea971bb527d0c102c0b2", "IPv4Addresses": [""]}]}
+	]}`
+	mux.HandleFunc("/ecsmetadata/bridge/dual/task", func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(http.StatusOK)
+		res.Write([]byte(containerMetadataResponseBridgeDual))
+	})
+
+	// Test case where first container has invalid network mode, but second container has valid one
+	containerMetadataResponseNetworkModeIteration := `{ "Cluster": "TestCluster", "TaskARN": "TestTask", "AvailabilityZone": "us-west-2d",
+	"Containers":[
+		{"Name": "nginx-client", "Type": "NORMAL", "Networks": [{"NetworkMode": "container:26b9f92b669c49893d2c05a8aee10af7bc37207f3a5353f46c17fc747dea353b", "IPv4Addresses": [""]}]},
+		{"Name": "pause", "Type": "CNI_PAUSE", "Networks": [{"NetworkMode": "bridge", "IPv4Addresses": ["172.17.0.8"]}]},
+		{"Name": "web-client", "Type": "NORMAL", "Networks": [{"NetworkMode": "container:26b9f92b669c49893d2c05a8aee10af7bc37207f3a5353f46c17fc747dea353b", "IPv4Addresses": [""]}]}
+	]}`
+	mux.HandleFunc("/ecsmetadata/bridge/networkmode-iteration/task", func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(http.StatusOK)
+		res.Write([]byte(containerMetadataResponseNetworkModeIteration))
+	})
+
+	// Test case where a container has multiple networks, with the second network having a valid mode
+	containerMetadataResponseMultipleNetworks := `{ "Cluster": "TestCluster", "TaskARN": "TestTask", "AvailabilityZone": "us-west-2d",
+	"Containers":[
+		{"Name": "multi-network-container", "Type": "NORMAL", "Networks": [
+			{"NetworkMode": "container:invalid123", "IPv4Addresses": [""]},
+			{"NetworkMode": "awsvpc", "IPv4Addresses": ["10.0.0.5"], "IPv6Addresses": ["2001:db8::5"]}
+		]}
+	]}`
+	mux.HandleFunc("/ecsmetadata/awsvpc/multiple-networks/task", func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(http.StatusOK)
+		res.Write([]byte(containerMetadataResponseMultipleNetworks))
+	})
+
 	srv := httptest.NewServer(mux)
 	return srv
 }
@@ -216,6 +286,24 @@ func TestGetEcsContainerMetadata(t *testing.T) {
 
 	ecsMetadata := make(map[string]interface{})
 	getEcsContainerMetadata(srv.URL+"/ecsmetadata/default/task", ecsMetadata)
+	getEcsEnvoyContainerMetadata(srv.URL, ecsMetadata)
+	assert.NotNil(t, ecsMetadata)
+	assert.Equal(t, 6, len(ecsMetadata))
+	assert.Equal(t, "TestCluster", ecsMetadata["ecsClusterArn"])
+	assert.Equal(t, "TestTask", ecsMetadata["ecsTaskArn"])
+	assert.Equal(t, "us-west-2d", ecsMetadata["AvailabilityZone"])
+	assert.Equal(t, "usw2-az4", ecsMetadata["AvailabilityZoneID"])
+	assert.Equal(t, "5", ecsMetadata["CPU"])
+	assert.Equal(t, "0.25", ecsMetadata["Memory"])
+}
+
+func TestGetEcsContainerMetadataNoAZID(t *testing.T) {
+	setup()
+	srv := setupEcsMetadataServer()
+	defer srv.Close()
+
+	ecsMetadata := make(map[string]interface{})
+	getEcsContainerMetadata(srv.URL+"/ecsmetadata/noazid/task", ecsMetadata)
 	getEcsEnvoyContainerMetadata(srv.URL, ecsMetadata)
 	assert.NotNil(t, ecsMetadata)
 	assert.Equal(t, 5, len(ecsMetadata))
@@ -399,6 +487,7 @@ func TestBuildEcsPlatformMap(t *testing.T) {
 
 	assert.NotNil(t, platformMap["AvailabilityZone"])
 	assert.Equal(t, "us-west-2d", platformMap["AvailabilityZone"])
+	assert.Equal(t, "usw2-az4", platformMap["AvailabilityZoneID"])
 }
 
 func TestBuildSupportedIPFamilies(t *testing.T) {
@@ -467,4 +556,134 @@ func TestBuildSupportedIPFamilies(t *testing.T) {
 	assert.NotNil(t, platformMap)
 
 	assert.Nil(t, platformMap["supportedIPFamilies"])
+}
+
+func TestBuildSupportedIPFamiliesBridgeMode(t *testing.T) {
+	setup()
+	srv := setupEcsBridgeModeMetadataServer()
+	defer srv.Close()
+
+	// Test bridge mode with CNI_PAUSE container having IPv4 only
+	os.Setenv(ecsContainerMetadataUriEnv, srv.URL+"/ecsmetadata/bridge/ipv4")
+	os.Setenv(ecsExecutionEnvVar, "AWS_ECS_EC2")
+	defer os.Unsetenv(ecsContainerMetadataUriEnv)
+	defer os.Unsetenv(ecsExecutionEnvVar)
+
+	md, err := BuildMetadata()
+	assert.Nil(t, err)
+	assert.NotNil(t, md)
+
+	platformMap := (*md)["aws.appmesh.platformInfo"].(map[string]interface{})
+	assert.NotNil(t, platformMap)
+
+	supportedIPFamilies := platformMap["supportedIPFamilies"].(string)
+	assert.Equal(t, "IPv4_ONLY", supportedIPFamilies)
+
+	// Test bridge mode with CNI_PAUSE container having both IPv4 and IPv6, APPNET mapping with IPv4
+	os.Setenv(ecsContainerMetadataUriEnv, srv.URL+"/ecsmetadata/bridge/dual")
+	os.Setenv("APPNET_CONTAINER_IP_MAPPING", `{"nginx-client":"172.17.0.5","web-client":"172.17.0.7"}`)
+	defer os.Unsetenv("APPNET_CONTAINER_IP_MAPPING")
+
+	md, err = BuildMetadata()
+	assert.Nil(t, err)
+	assert.NotNil(t, md)
+	platformMap = (*md)["aws.appmesh.platformInfo"].(map[string]interface{})
+	assert.NotNil(t, platformMap)
+
+	supportedIPFamilies = platformMap["supportedIPFamilies"].(string)
+	assert.Equal(t, "ALL", supportedIPFamilies)
+
+	// Test bridge mode with CNI_PAUSE container having both IPv4 and IPv6, APPNET mapping with IPv6
+	os.Setenv("APPNET_CONTAINER_IP_MAPPING", `{"nginx-client":"2001:db8:1::242:ac11:5","web-client":"2001:db8:1::242:ac11:7"}`)
+
+	md, err = BuildMetadata()
+	assert.Nil(t, err)
+	assert.NotNil(t, md)
+	platformMap = (*md)["aws.appmesh.platformInfo"].(map[string]interface{})
+	assert.NotNil(t, platformMap)
+
+	supportedIPFamilies = platformMap["supportedIPFamilies"].(string)
+	assert.Equal(t, "IPv6_ONLY", supportedIPFamilies)
+
+	// Test bridge mode where first container has invalid network mode but second container has valid bridge mode
+	os.Setenv(ecsContainerMetadataUriEnv, srv.URL+"/ecsmetadata/bridge/networkmode-iteration")
+	os.Unsetenv("APPNET_CONTAINER_IP_MAPPING") // Clear previous mapping
+
+	md, err = BuildMetadata()
+	assert.Nil(t, err)
+	assert.NotNil(t, md)
+	platformMap = (*md)["aws.appmesh.platformInfo"].(map[string]interface{})
+	assert.NotNil(t, platformMap)
+
+	supportedIPFamilies = platformMap["supportedIPFamilies"].(string)
+	assert.Equal(t, "IPv4_ONLY", supportedIPFamilies)
+
+	// Test case where a container has multiple networks, with the second network having a valid mode
+	os.Setenv(ecsContainerMetadataUriEnv, srv.URL+"/ecsmetadata/awsvpc/multiple-networks")
+	os.Unsetenv("APPNET_CONTAINER_IP_MAPPING") // Clear previous mapping
+
+	md, err = BuildMetadata()
+	assert.Nil(t, err)
+	assert.NotNil(t, md)
+	platformMap = (*md)["aws.appmesh.platformInfo"].(map[string]interface{})
+	assert.NotNil(t, platformMap)
+
+	supportedIPFamilies = platformMap["supportedIPFamilies"].(string)
+	assert.Equal(t, "ALL", supportedIPFamilies) // awsvpc mode with both IPv4 and IPv6
+}
+
+func TestGetZoneId_WithValidMetadata(t *testing.T) {
+	metadata, _ := structpb.NewStruct(map[string]interface{}{
+		"aws.appmesh.platformInfo": map[string]interface{}{
+			"AvailabilityZoneID": "use1-az1",
+		},
+	})
+
+	zone := GetZoneId(metadata)
+	assert.Equal(t, "use1-az1", zone)
+}
+
+func TestGetZoneId_WithNilMetadata(t *testing.T) {
+	zone := GetZoneId(nil)
+	assert.Equal(t, "", zone)
+}
+
+func TestGetZoneId_WithEmptyMetadata(t *testing.T) {
+	metadata, _ := structpb.NewStruct(map[string]interface{}{})
+
+	zone := GetZoneId(metadata)
+	assert.Equal(t, "", zone)
+}
+
+func TestGetZoneId_WithMissingNamespace(t *testing.T) {
+	metadata, _ := structpb.NewStruct(map[string]interface{}{
+		"other.namespace": map[string]interface{}{
+			"AvailabilityZoneID": "use1-az1",
+		},
+	})
+
+	zone := GetZoneId(metadata)
+	assert.Equal(t, "", zone)
+}
+
+func TestGetZoneId_WithMissingAvailabilityZoneID(t *testing.T) {
+	metadata, _ := structpb.NewStruct(map[string]interface{}{
+		"aws.appmesh.platformInfo": map[string]interface{}{
+			"AvailabilityZone": "us-east-1a",
+		},
+	})
+
+	zone := GetZoneId(metadata)
+	assert.Equal(t, "", zone)
+}
+
+func TestGetZoneId_WithNonStringAvailabilityZoneID(t *testing.T) {
+	metadata, _ := structpb.NewStruct(map[string]interface{}{
+		"aws.appmesh.platformInfo": map[string]interface{}{
+			"AvailabilityZoneID": 12345,
+		},
+	})
+
+	zone := GetZoneId(metadata)
+	assert.Equal(t, "", zone)
 }

@@ -1,0 +1,7 @@
+FROM public.ecr.aws/docker/library/golang:1.23-alpine
+
+RUN apk add --no-cache make gcc musl-dev linux-headers libcap-dev
+
+WORKDIR /build
+
+ENTRYPOINT ["make"]
