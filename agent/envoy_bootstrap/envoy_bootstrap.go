@@ -1713,6 +1713,13 @@ func setRelayBootstrapEnvVariables(agentConfig config.AgentConfig, envoyCLIInst 
 		os.Setenv("ENVOY_USE_HTTP_CLIENT_TO_FETCH_AWS_CREDENTIALS", fmt.Sprint(agentConfig.EnvoyUseHttpClientToFetchAwsCredentials))
 	}
 
+	region := os.Getenv("AWS_REGION")
+	if strings.HasPrefix(region, "us-isof-") || strings.HasPrefix(region, "eu-isoe-") {
+		os.Setenv("TLS_CURVE", "P-384")
+	} else {
+		os.Setenv("TLS_CURVE", "P-256")
+	}
+
 	return nil
 }
 
