@@ -36,6 +36,13 @@ type Snapshotter struct {
 	HttpRequest *retryablehttp.Request
 }
 
+// ResetSnapshot clears the previous snapshot so the next delta computation treats
+// the next snapshot as the first one.
+func (snapshotter *Snapshotter) ResetSnapshot() {
+	snapshotter.Snapshot = nil
+	log.Info("Snapshot reset due to Envoy process exit.")
+}
+
 func (snapshotter *Snapshotter) StartSnapshot(agentConfig config.AgentConfig) {
 	httpClient, err := client.CreateRetryableHttpClientForEnvoyServer(agentConfig)
 	httpClient.HTTPClient.Timeout = EnvoyStatsClientHttpTimeout

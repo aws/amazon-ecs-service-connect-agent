@@ -184,3 +184,82 @@ func TestComputeDeltaForMetricFamily(t *testing.T) {
 	assert.NotNil(t, deltaMetricFamily.Metric[0].Gauge)
 	assert.Equal(t, float64(5), deltaMetricFamily.Metric[0].Gauge.GetValue())
 }
+
+func TestResetSnapshot(t *testing.T) {
+	snapshotter := Snapshotter{}
+
+	input1 := []byte("# TYPE RequestCount counter\n" +
+		"RequestCount{Service=\"svc\"} 10\n")
+	snapshot1, err := parsePrometheusStats(input1)
+	assert.NoError(t, err)
+
+	snapshotter.computeDelta(snapshot1)
+	snapshotter.Snapshot = snapshot1
+	assert.NotNil(t, snapshotter.Snapshot)
+	assert.NotNil(t, snapshotter.Delta)
+
+	input2 := []byte("# TYPE RequestCount counter\n" +
+		"RequestCount{Service=\"svc\"} 20\n")
+	snapshot2, err := parsePrometheusStats(input2)
+	assert.NoError(t, err)
+
+	snapshotter.computeDelta(snapshot2)
+	snapshotter.Snapshot = snapshot2
+	assert.Equal(t, float64(10), snapshotter.Delta["RequestCount"].Metric[0].Counter.GetValue())
+
+	// Envoy dies, ResetSnapshot is called before new Envoy starts
+	snapshotter.ResetSnapshot()
+	assert.Nil(t, snapshotter.Snapshot)
+
+	// New Envoy starts, counters reset to zero
+	input3 := []byte("# TYPE RequestCount counter\n" +
+		"RequestCount{Service=\"svc\"} 5\n")
+	snapshot3, err := parsePrometheusStats(input3)
+	assert.NoError(t, err)
+
+	snapshotter.computeDelta(snapshot3)
+	snapshotter.Snapshot = snapshot3
+
+	// Delta should be 5 (the raw new value), not 5 - 20 = -15
+	assert.Equal(t, float64(5), snapshotter.Delta["RequestCount"].Metric[0].Counter.GetValue())
+}
+
+func TestResetSnapshotHistogram(t *testing.T) {
+	snapshotter := Snapshotter{}
+
+	input1 := []byte("# TYPE TargetResponseTime histogram\n" +
+		"TargetResponseTime_bucket{Service=\"svc\",le=\"5\"} 30\n" +
+		"TargetResponseTime_bucket{Service=\"svc\",le=\"+Inf\"} 50\n" +
+		"TargetResponseTime_sum{Service=\"svc\"} 100.0\n" +
+		"TargetResponseTime_count{Service=\"svc\"} 50\n")
+	snapshot1, err := parsePrometheusStats(input1)
+	assert.NoError(t, err)
+
+	snapshotter.computeDelta(snapshot1)
+	snapshotter.Snapshot = snapshot1
+
+	// Envoy dies, ResetSnapshot is called
+	snapshotter.ResetSnapshot()
+	assert.Nil(t, snapshotter.Snapshot)
+
+	// New Envoy starts with reset counters
+	input2 := []byte("# TYPE TargetResponseTime histogram\n" +
+		"TargetResponseTime_bucket{Service=\"svc\",le=\"5\"} 3\n" +
+		"TargetResponseTime_bucket{Service=\"svc\",le=\"+Inf\"} 5\n" +
+		"TargetResponseTime_sum{Service=\"svc\"} 12.5\n" +
+		"TargetResponseTime_count{Service=\"svc\"} 5\n")
+	snapshot2, err := parsePrometheusStats(input2)
+	assert.NoError(t, err)
+
+	snapshotter.computeDelta(snapshot2)
+	snapshotter.Snapshot = snapshot2
+
+	name := "TargetResponseTime"
+	histogram := snapshotter.Delta[name].Metric[0].Histogram
+
+	// All values should be the raw new values, not deltas against the old snapshot
+	assert.Equal(t, uint64(3), histogram.Bucket[0].GetCumulativeCount())
+	assert.Equal(t, uint64(5), histogram.Bucket[1].GetCumulativeCount())
+	assert.Equal(t, uint64(5), histogram.GetSampleCount())
+	assert.Equal(t, 12.5, histogram.GetSampleSum())
+}

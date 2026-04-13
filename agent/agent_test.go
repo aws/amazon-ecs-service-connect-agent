@@ -209,7 +209,7 @@ func TestKeepCommandAlive(t *testing.T) {
 
 	start := time.Now()
 
-	go keepCommandAlive(agentConfig, &messageSources)
+	go keepCommandAlive(agentConfig, &messageSources, nil)
 
 	for {
 		loopElapsed := time.Since(start)
@@ -253,7 +253,7 @@ func TestKeepCommandAliveWithRestart(t *testing.T) {
 
 	start := time.Now()
 
-	go keepCommandAlive(agentConfig, &messageSources)
+	go keepCommandAlive(agentConfig, &messageSources, nil)
 
 	// one initial start and EnvoyRestartCount additional pids
 	expectedPids := agentConfig.EnvoyRestartCount + 1
@@ -458,7 +458,7 @@ func TestLoggingToFileWithCommandExecution(t *testing.T) {
 	messageSources.SetupChannels()
 
 	// We just need the command to run.  This won't take long
-	go keepCommandAlive(agentConfig, &messageSources)
+	go keepCommandAlive(agentConfig, &messageSources, nil)
 	time.Sleep(250 * time.Millisecond)
 
 	syscall.Sync()
@@ -539,7 +539,7 @@ func skip_TestLogRotation(t *testing.T) {
 	var messageSources messagesources.MessageSources
 	messageSources.SetupChannels()
 
-	go keepCommandAlive(agentConfig, &messageSources)
+	go keepCommandAlive(agentConfig, &messageSources, nil)
 
 	// Run for 10 seconds to give ample time for data to accumulate
 	time.Sleep(10 * time.Second)
