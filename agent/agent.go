@@ -225,7 +225,7 @@ func setAgentCapabilities() error {
 }
 
 // start the command object, restarting up to the configured limit
-func keepCommandAlive(agentConfig config.AgentConfig, messageSource *messagesources.MessageSources) {
+func keepCommandAlive(agentConfig config.AgentConfig, messageSource *messagesources.MessageSources, snapshotter *stats.Snapshotter) {
 	var restartCount int = 0
 
 	// If we are exiting this function, then we should exit the agent.  ECS
@@ -238,6 +238,13 @@ func keepCommandAlive(agentConfig config.AgentConfig, messageSource *messagesour
 
 		// Build the command line arguments and execute the program
 		cmdArgs := buildCommandArgs(agentConfig)
+
+		// Reset the stats snapshot before restarting Envoy. Envoy's counters will reset
+		// to zero on restart, so the old snapshot must be discarded to avoid computing
+		// deltas against stale pre-restart values.
+		if snapshotter != nil {
+			snapshotter.ResetSnapshot()
+		}
 
 		pid, err := startCommand(agentConfig, cmdArgs)
 		if err != nil {
@@ -610,7 +617,7 @@ func main() {
 	setupUdsForEnvoyAdmin(agentConfig, &messageSources)
 
 	// Start the configured binary and keep it alive
-	go keepCommandAlive(agentConfig, &messageSources)
+	go keepCommandAlive(agentConfig, &messageSources, &snapshotter)
 	defer stopProcesses(agentConfig.StopProcessWaitTime, &messageSources)
 
 	go healthStatus.StartHealthCheck(agentStartTime, agentConfig, &messageSources)
