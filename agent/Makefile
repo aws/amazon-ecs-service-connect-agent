@@ -11,7 +11,7 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-.PHONY: build format test go-build clean run vendor
+.PHONY: build format test test-race go-build clean run vendor
 
 OSARCH = $(shell arch)
 ifeq ($(OSARCH), x86_64)
@@ -48,6 +48,9 @@ format: $(SRCS)
 
 test: $(SRCS) format
 	go test -mod=vendor -count=1 -v ./...
+
+test-race: $(SRCS) format
+	go test -mod=vendor -count=1 -race -v ./...
 
 go-build: $(SRCS) format
 	GOPATH=$(shell pwd)
