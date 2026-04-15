@@ -22,6 +22,7 @@ import (
 
 	"github.com/aws/aws-app-mesh-agent/agent/client"
 	"github.com/aws/aws-app-mesh-agent/agent/config"
+	"github.com/aws/aws-app-mesh-agent/agent/stats/snapshot"
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/prometheus/client_model/go"
@@ -29,21 +30,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type Snapshotter struct {
-	Snapshot    map[string]*io_prometheus_client.MetricFamily
-	Delta       map[string]*io_prometheus_client.MetricFamily
-	HttpClient  *retryablehttp.Client
-	HttpRequest *retryablehttp.Request
-}
-
-// ResetSnapshot clears the previous snapshot so the next delta computation treats
-// the next snapshot as the first one.
-func (snapshotter *Snapshotter) ResetSnapshot() {
-	snapshotter.Snapshot = nil
-	log.Info("Snapshot reset due to Envoy process exit.")
-}
-
-func (snapshotter *Snapshotter) StartSnapshot(agentConfig config.AgentConfig) {
+func StartSnapshot(snapshotter *snapshot.Snapshotter, agentConfig config.AgentConfig) {
 	httpClient, err := client.CreateRetryableHttpClientForEnvoyServer(agentConfig)
 	httpClient.HTTPClient.Timeout = EnvoyStatsClientHttpTimeout
 	if err != nil {
@@ -68,28 +55,28 @@ func (snapshotter *Snapshotter) StartSnapshot(agentConfig config.AgentConfig) {
 	for {
 		select {
 		case <-ticker.C:
-			snapshotter.makeSnapshot()
+			MakeSnapshot(snapshotter)
 		}
 	}
 }
 
-// makeSnapshot capture snapshots once invoked, it will automatically compute delta once we have enough snapshots.
+// MakeSnapshot capture snapshots once invoked, it will automatically compute delta once we have enough snapshots.
 // The newly captured snapshot will be saved to snapshotter.
-func (snapshotter *Snapshotter) makeSnapshot() {
+func MakeSnapshot(snapshotter *snapshot.Snapshotter) {
 	statsBody, err := getStatsFromEnvoy(snapshotter.HttpClient, snapshotter.HttpRequest)
 	if err != nil {
 		log.Errorf("failed to get stats from Envoy, error: %v", err)
 		return
 	}
-	snapshot, err := processPrometheusStats(statsBody)
+	newSnapshot, err := processPrometheusStats(statsBody)
 	if err != nil {
 		log.Errorf("error processing Prometheus stats: %v", err)
 		return
 	}
-	if snapshot != nil {
+	if newSnapshot != nil {
 		// We will compute the delta and then save or overwrite the newly captured snapshot.
-		snapshotter.computeDelta(snapshot)
-		snapshotter.Snapshot = snapshot
+		computeDelta(snapshotter, newSnapshot)
+		snapshotter.SetSnapshot(newSnapshot)
 	}
 }
 
@@ -99,15 +86,16 @@ func (snapshotter *Snapshotter) makeSnapshot() {
 //
 // The dependency library does not support protobuf v2 APIs. See their README: https://github.com/prometheus/client_model
 // Possibly switching to OpenMetrics(https://openmetrics.io/) when it is ready in the future.
-func (snapshotter *Snapshotter) computeDelta(newSnapshot map[string]*io_prometheus_client.MetricFamily) {
+func computeDelta(snapshotter *snapshot.Snapshotter, newSnapshot map[string]*io_prometheus_client.MetricFamily) {
 	if newSnapshot == nil {
 		log.Errorf("the newSnapshot should exist to compute the snapshot")
 		return
 	}
 
-	if snapshotter.Snapshot == nil {
+	currentSnapshot := snapshotter.GetSnapshot()
+	if currentSnapshot == nil {
 		log.Debugf("Using the new snapshot as delta since there is no previously captured snapshot yet.")
-		snapshotter.Delta = newSnapshot
+		snapshotter.SetDelta(newSnapshot)
 		return
 	}
 
@@ -116,14 +104,14 @@ func (snapshotter *Snapshotter) computeDelta(newSnapshot map[string]*io_promethe
 		// It is possible that there are new metrics emitted in the new snapshot, in which case the old snapshot won't
 		// have the corresponding metrics. This would result in metricFamilyKey does not exist in the existing snapshot,
 		// in which case the oldMetricFamily passed in would simply be nil.
-		snapshotter.computeDeltaForMetricFamily(snapshotter.Snapshot[metricFamilyKey], newMetricFamily, newDelta)
+		computeDeltaForMetricFamily(currentSnapshot[metricFamilyKey], newMetricFamily, newDelta)
 
 	}
 	// We only update Delta once the new delta is completely computed.
-	snapshotter.Delta = newDelta
+	snapshotter.SetDelta(newDelta)
 }
 
-func (snapshotter *Snapshotter) computeDeltaForMetricFamily(oldMetricFamily, newMetricFamily *io_prometheus_client.MetricFamily, delta map[string]*io_prometheus_client.MetricFamily) {
+func computeDeltaForMetricFamily(oldMetricFamily, newMetricFamily *io_prometheus_client.MetricFamily, delta map[string]*io_prometheus_client.MetricFamily) {
 	if oldMetricFamily == nil && newMetricFamily == nil {
 		log.Error("both metric families are empty, cannot compute delta")
 		return
@@ -246,7 +234,7 @@ func generateMetricKey(labels []*io_prometheus_client.LabelPair) string {
 	return metricKey
 }
 
-// Util function for snapshotter to call Envoy Stats endpoint
+// Util function for calling Envoy Stats endpoint
 func getStatsFromEnvoy(httpClient *retryablehttp.Client, request *retryablehttp.Request) ([]byte, error) {
 	// Send request to Envoy Stats endpoint
 	start := time.Now()
