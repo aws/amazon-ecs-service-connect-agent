@@ -25,6 +25,7 @@ import (
 
 	"github.com/aws/aws-app-mesh-agent/agent/client"
 	"github.com/aws/aws-app-mesh-agent/agent/config"
+	"github.com/aws/aws-app-mesh-agent/agent/stats/snapshot"
 
 	// reference: https://github.com/prometheus/common/blob/main/expfmt/text_parse.go#L25
 	"github.com/prometheus/client_golang/prometheus"
@@ -38,7 +39,7 @@ type EnvoyPrometheusStatsHandler struct {
 	AgentConfig     config.AgentConfig
 	Limiter         *rate.Limiter
 	QueryParameters url.Values
-	Snapshotter     *Snapshotter
+	Snapshotter     *snapshot.Snapshotter
 }
 
 const (
@@ -81,13 +82,16 @@ func (envoyPrometheusStatsHandler *EnvoyPrometheusStatsHandler) HandleStats(resW
 	}
 
 	// If the Delta exists, we would just return Delta directly with no further operation needed.
-	if envoyPrometheusStatsHandler.QueryParameters.Has(deltaQueryKey) && envoyPrometheusStatsHandler.Snapshotter.Delta != nil {
-		resWriter.WriteHeader(http.StatusOK)
-		err := writeMetricsToResponse(resWriter, envoyPrometheusStatsHandler.Snapshotter.Delta)
-		if err != nil {
-			log.Errorf("error while writing response: %s", err)
+	if envoyPrometheusStatsHandler.QueryParameters.Has(deltaQueryKey) {
+		delta := envoyPrometheusStatsHandler.Snapshotter.GetDelta()
+		if delta != nil {
+			resWriter.WriteHeader(http.StatusOK)
+			err := writeMetricsToResponse(resWriter, delta)
+			if err != nil {
+				log.Errorf("error while writing response: %s", err)
+			}
+			return
 		}
-		return
 	}
 
 	// If Delta is not yet computed, most likely it is too early and we don't yet have two snapshots to compute the
