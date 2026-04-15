@@ -28,12 +28,13 @@ import (
 	"github.com/aws/aws-app-mesh-agent/agent/client"
 	"github.com/aws/aws-app-mesh-agent/agent/config"
 	"github.com/aws/aws-app-mesh-agent/agent/internal/netlistenertest"
+	"github.com/aws/aws-app-mesh-agent/agent/stats/snapshot"
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/time/rate"
 )
 
-func buildHandlerWithSnapshotter(agentConfig config.AgentConfig, snapshotter *Snapshotter) EnvoyPrometheusStatsHandler {
+func buildHandlerWithSnapshotter(agentConfig config.AgentConfig, snapshotter *snapshot.Snapshotter) EnvoyPrometheusStatsHandler {
 	return EnvoyPrometheusStatsHandler{
 		AgentConfig: agentConfig,
 		Limiter:     rate.NewLimiter(config.TPS_LIMIT, config.BURST_TPS_LIMIT),
@@ -278,9 +279,9 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Delta_Si
 
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
-	var snapshotter Snapshotter
+	var snapshotter snapshot.Snapshotter
 	envoyStatsHandler := buildHandlerWithSnapshotter(agentConfig, &snapshotter)
-	assert.Nil(t, snapshotter.Delta)
+	assert.Nil(t, snapshotter.GetDelta())
 
 	// Update EnvoyServer info to honor the mock Envoy server
 	envoyUrl, err := url.Parse(envoy.URL)
@@ -299,14 +300,14 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Delta_Si
 	snapshotter.HttpRequest, err = client.CreateRetryableAgentRequest(http.MethodGet, statsUrl, nil)
 	assert.NoError(t, err)
 	// Make one snapshot, then call computeDelta
-	snapshotter.makeSnapshot()
+	MakeSnapshot(&snapshotter)
 
 	filterParam := fmt.Sprintf("%s=%s", filterQueryKey, QuerySet[filterQueryKey])
 	requestUrl := fmt.Sprintf("%s?%s&%s&%s", statsServer.URL, filterParam, usedOnlyQueryKey, deltaQueryKey)
 
 	// Expecting Delta value equals to 0 and Delta object equals to the very first snapshot
-	assert.NotNil(t, snapshotter.Delta)
-	assert.Equal(t, snapshotter.Delta, snapshotter.Snapshot)
+	assert.NotNil(t, snapshotter.GetDelta())
+	assert.Equal(t, snapshotter.GetDelta(), snapshotter.GetSnapshot())
 	res, err := http.Get(requestUrl)
 	assert.NotNil(t, res)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
@@ -334,7 +335,7 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Delta(t 
 
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
-	var snapshotter Snapshotter
+	var snapshotter snapshot.Snapshotter
 	envoyStatsHandler := buildHandlerWithSnapshotter(agentConfig, &snapshotter)
 
 	// Update EnvoyServer info to honor the mock Envoy server
@@ -354,8 +355,8 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Delta(t 
 	snapshotter.HttpRequest, err = client.CreateRetryableAgentRequest(http.MethodGet, statsUrl, nil)
 	assert.NoError(t, err)
 	// Make two snapshots, then compute
-	snapshotter.makeSnapshot()
-	snapshotter.makeSnapshot()
+	MakeSnapshot(&snapshotter)
+	MakeSnapshot(&snapshotter)
 
 	filterParam := fmt.Sprintf("%s=%s", filterQueryKey, QuerySet[filterQueryKey])
 	requestUrl := fmt.Sprintf("%s?%s&%s&%s", statsServer.URL, filterParam, usedOnlyQueryKey, deltaQueryKey)
@@ -387,7 +388,7 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Delta_Ne
 
 	var agentConfig config.AgentConfig
 	agentConfig.SetDefaults()
-	var snapshotter Snapshotter
+	var snapshotter snapshot.Snapshotter
 	envoyStatsHandler := buildHandlerWithSnapshotter(agentConfig, &snapshotter)
 
 	// Update EnvoyServer info to honor the mock Envoy server
@@ -407,8 +408,8 @@ func TestEnvoyPrometheusStatsHandler_HandleStats_Success_QueryParameter_Delta_Ne
 	snapshotter.HttpRequest, err = client.CreateRetryableAgentRequest(http.MethodGet, statsUrl, nil)
 	assert.NoError(t, err)
 	// Make two snapshots, then compute, here making snapshot would indirectly call the Envoy stats handler
-	snapshotter.makeSnapshot()
-	snapshotter.makeSnapshot()
+	MakeSnapshot(&snapshotter)
+	MakeSnapshot(&snapshotter)
 
 	filterParam := fmt.Sprintf("%s=%s", filterQueryKey, QuerySet[filterQueryKey])
 	requestUrl := fmt.Sprintf("%s?%s&%s&%s", statsServer.URL, filterParam, usedOnlyQueryKey, deltaQueryKey)
