@@ -87,6 +87,9 @@ static_resources:
             validation_context:
               trusted_ca:
                 filename: /etc/pki/tls/cert.pem
+            tls_params:
+              ecdh_curves:
+                - $TLS_CURVE
           sni: $APPNET_MANAGEMENT_DOMAIN_NAME
 
 admin:

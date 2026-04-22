@@ -14,11 +14,13 @@
 package stats
 
 import (
+	"strings"
+	"testing"
+
+	"github.com/aws/aws-app-mesh-agent/agent/stats/snapshot"
 	"github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/stretchr/testify/assert"
-	"strings"
-	"testing"
 )
 
 func TestComputeDeltaForMetricFamily(t *testing.T) {
@@ -43,9 +45,8 @@ func TestComputeDeltaForMetricFamily(t *testing.T) {
 	assert.True(t, ok)
 
 	// Manually call computeDelta
-	snapshotter := Snapshotter{}
 	delta := make(map[string]*io_prometheus_client.MetricFamily)
-	snapshotter.computeDeltaForMetricFamily(metricFamily1, metricFamily2, delta)
+	computeDeltaForMetricFamily(metricFamily1, metricFamily2, delta)
 	assert.NotNil(t, delta)
 
 	// Examine the delta to make sure it is correctly computed
@@ -79,7 +80,7 @@ func TestComputeDeltaForMetricFamily(t *testing.T) {
 
 	// Manually call computeDelta
 	delta = make(map[string]*io_prometheus_client.MetricFamily)
-	snapshotter.computeDeltaForMetricFamily(metricFamily1, metricFamily2, delta)
+	computeDeltaForMetricFamily(metricFamily1, metricFamily2, delta)
 	assert.NotNil(t, delta)
 
 	// Examine the delta to make sure it is correctly computed
@@ -125,7 +126,7 @@ func TestComputeDeltaForMetricFamily(t *testing.T) {
 
 	// Compute Delta
 	delta = make(map[string]*io_prometheus_client.MetricFamily)
-	snapshotter.computeDeltaForMetricFamily(metricFamily1, metricFamily2, delta)
+	computeDeltaForMetricFamily(metricFamily1, metricFamily2, delta)
 
 	assert.NotNil(t, delta)
 	deltaMetricFamily, ok = delta[name]
@@ -173,7 +174,7 @@ func TestComputeDeltaForMetricFamily(t *testing.T) {
 
 	// Manually call computeDelta
 	delta = make(map[string]*io_prometheus_client.MetricFamily)
-	snapshotter.computeDeltaForMetricFamily(metricFamily1, metricFamily2, delta)
+	computeDeltaForMetricFamily(metricFamily1, metricFamily2, delta)
 	assert.NotNil(t, delta)
 
 	// Examine the delta to make sure it is correctly computed
@@ -183,4 +184,83 @@ func TestComputeDeltaForMetricFamily(t *testing.T) {
 	assert.Equal(t, 1, len(deltaMetricFamily.GetMetric()))
 	assert.NotNil(t, deltaMetricFamily.Metric[0].Gauge)
 	assert.Equal(t, float64(5), deltaMetricFamily.Metric[0].Gauge.GetValue())
+}
+
+func TestResetSnapshot(t *testing.T) {
+	snapshotter := snapshot.Snapshotter{}
+
+	input1 := []byte("# TYPE RequestCount counter\n" +
+		"RequestCount{Service=\"svc\"} 10\n")
+	snapshot1, err := parsePrometheusStats(input1)
+	assert.NoError(t, err)
+
+	computeDelta(&snapshotter, snapshot1)
+	snapshotter.SetSnapshot(snapshot1)
+	assert.NotNil(t, snapshotter.GetSnapshot())
+	assert.NotNil(t, snapshotter.GetDelta())
+
+	input2 := []byte("# TYPE RequestCount counter\n" +
+		"RequestCount{Service=\"svc\"} 20\n")
+	snapshot2, err := parsePrometheusStats(input2)
+	assert.NoError(t, err)
+
+	computeDelta(&snapshotter, snapshot2)
+	snapshotter.SetSnapshot(snapshot2)
+	assert.Equal(t, float64(10), snapshotter.GetDelta()["RequestCount"].Metric[0].Counter.GetValue())
+
+	// Envoy dies, ResetSnapshot is called before new Envoy starts
+	snapshotter.ResetSnapshot()
+	assert.Nil(t, snapshotter.GetSnapshot())
+
+	// New Envoy starts, counters reset to zero
+	input3 := []byte("# TYPE RequestCount counter\n" +
+		"RequestCount{Service=\"svc\"} 5\n")
+	snapshot3, err := parsePrometheusStats(input3)
+	assert.NoError(t, err)
+
+	computeDelta(&snapshotter, snapshot3)
+	snapshotter.SetSnapshot(snapshot3)
+
+	// Delta should be 5 (the raw new value), not 5 - 20 = -15
+	assert.Equal(t, float64(5), snapshotter.GetDelta()["RequestCount"].Metric[0].Counter.GetValue())
+}
+
+func TestResetSnapshotHistogram(t *testing.T) {
+	snapshotter := snapshot.Snapshotter{}
+
+	input1 := []byte("# TYPE TargetResponseTime histogram\n" +
+		"TargetResponseTime_bucket{Service=\"svc\",le=\"5\"} 30\n" +
+		"TargetResponseTime_bucket{Service=\"svc\",le=\"+Inf\"} 50\n" +
+		"TargetResponseTime_sum{Service=\"svc\"} 100.0\n" +
+		"TargetResponseTime_count{Service=\"svc\"} 50\n")
+	snapshot1, err := parsePrometheusStats(input1)
+	assert.NoError(t, err)
+
+	computeDelta(&snapshotter, snapshot1)
+	snapshotter.SetSnapshot(snapshot1)
+
+	// Envoy dies, ResetSnapshot is called
+	snapshotter.ResetSnapshot()
+	assert.Nil(t, snapshotter.GetSnapshot())
+
+	// New Envoy starts with reset counters
+	input2 := []byte("# TYPE TargetResponseTime histogram\n" +
+		"TargetResponseTime_bucket{Service=\"svc\",le=\"5\"} 3\n" +
+		"TargetResponseTime_bucket{Service=\"svc\",le=\"+Inf\"} 5\n" +
+		"TargetResponseTime_sum{Service=\"svc\"} 12.5\n" +
+		"TargetResponseTime_count{Service=\"svc\"} 5\n")
+	snapshot2, err := parsePrometheusStats(input2)
+	assert.NoError(t, err)
+
+	computeDelta(&snapshotter, snapshot2)
+	snapshotter.SetSnapshot(snapshot2)
+
+	name := "TargetResponseTime"
+	histogram := snapshotter.GetDelta()[name].Metric[0].Histogram
+
+	// All values should be the raw new values, not deltas against the old snapshot
+	assert.Equal(t, uint64(3), histogram.Bucket[0].GetCumulativeCount())
+	assert.Equal(t, uint64(5), histogram.Bucket[1].GetCumulativeCount())
+	assert.Equal(t, uint64(5), histogram.GetSampleCount())
+	assert.Equal(t, 12.5, histogram.GetSampleSum())
 }

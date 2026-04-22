@@ -35,6 +35,7 @@ import (
 	"github.com/aws/aws-app-mesh-agent/agent/messagesources"
 	"github.com/aws/aws-app-mesh-agent/agent/server"
 	"github.com/aws/aws-app-mesh-agent/agent/stats"
+	"github.com/aws/aws-app-mesh-agent/agent/stats/snapshot"
 	cap "kernel.org/pub/linux/libs/security/libcap/cap"
 
 	log "github.com/sirupsen/logrus"
@@ -225,7 +226,7 @@ func setAgentCapabilities() error {
 }
 
 // start the command object, restarting up to the configured limit
-func keepCommandAlive(agentConfig config.AgentConfig, messageSource *messagesources.MessageSources) {
+func keepCommandAlive(agentConfig config.AgentConfig, messageSource *messagesources.MessageSources, snapshotter *snapshot.Snapshotter) {
 	var restartCount int = 0
 
 	// If we are exiting this function, then we should exit the agent.  ECS
@@ -238,6 +239,13 @@ func keepCommandAlive(agentConfig config.AgentConfig, messageSource *messagesour
 
 		// Build the command line arguments and execute the program
 		cmdArgs := buildCommandArgs(agentConfig)
+
+		// Reset the stats snapshot before restarting Envoy. Envoy's counters will reset
+		// to zero on restart, so the old snapshot must be discarded to avoid computing
+		// deltas against stale pre-restart values.
+		if snapshotter != nil {
+			snapshotter.ResetSnapshot()
+		}
 
 		pid, err := startCommand(agentConfig, cmdArgs)
 		if err != nil {
@@ -377,7 +385,7 @@ func gracefullyDrainEnvoyListeners(agentConfig config.AgentConfig) {
 
 func setupHttpServer(agentConfig config.AgentConfig,
 	healthStatus *healthcheck.HealthStatus,
-	snapshotter *stats.Snapshotter,
+	snapshotter *snapshot.Snapshotter,
 	messageSources *messagesources.MessageSources) {
 
 	if agentConfig.AgentAdminMode == config.UDS {
@@ -572,7 +580,7 @@ func main() {
 	var messageSources messagesources.MessageSources
 	var agentConfig config.AgentConfig
 	var healthStatus healthcheck.HealthStatus
-	var snapshotter stats.Snapshotter
+	var snapshotter snapshot.Snapshotter
 
 	agentConfig.ParseFlags(os.Args)
 	agentConfig.SetDefaults()
@@ -610,13 +618,13 @@ func main() {
 	setupUdsForEnvoyAdmin(agentConfig, &messageSources)
 
 	// Start the configured binary and keep it alive
-	go keepCommandAlive(agentConfig, &messageSources)
+	go keepCommandAlive(agentConfig, &messageSources, &snapshotter)
 	defer stopProcesses(agentConfig.StopProcessWaitTime, &messageSources)
 
 	go healthStatus.StartHealthCheck(agentStartTime, agentConfig, &messageSources)
 	if agentConfig.EnableStatsSnapshot {
 		log.Debug("Enabling stats snapshot...")
-		go snapshotter.StartSnapshot(agentConfig)
+		go stats.StartSnapshot(&snapshotter, agentConfig)
 	}
 
 	// Start the agent http server only if APPNET_AGENT_ADMIN_MODE is set
