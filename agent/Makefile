@@ -11,7 +11,7 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-.PHONY: build format test test-race go-build clean run vendor
+.PHONY: build format test test-race go-build clean run vendor coverage
 
 OSARCH = $(shell arch)
 ifeq ($(OSARCH), x86_64)
@@ -38,7 +38,10 @@ SRCS := $(wildcard *.go) \
 	$(wildcard client/*.go) \
 	$(wildcard stats/*.go) \
 
-build: test go-build
+COVERAGE_THRESHOLD ?= 70
+COVERAGE_FILE := coverage.out
+
+build: coverage go-build
 
 vendor:
 	go mod vendor
@@ -48,6 +51,15 @@ format: $(SRCS)
 
 test: $(SRCS) format
 	go test -mod=vendor -count=1 -v ./...
+
+coverage: $(SRCS) format
+	go test -mod=vendor -count=1 -coverprofile=$(COVERAGE_FILE) ./...
+	@COVERAGE=$$(go tool cover -func=$(COVERAGE_FILE) | grep total | awk '{print $$3}' | tr -d '%'); \
+	echo "Total coverage: $${COVERAGE}%"; \
+	if [ $$(echo "$${COVERAGE} < $(COVERAGE_THRESHOLD)" | bc) -eq 1 ]; then \
+		echo "FAIL: Coverage $${COVERAGE}% is below threshold $(COVERAGE_THRESHOLD)%"; \
+		exit 1; \
+	fi
 
 test-race: $(SRCS) format
 	go test -mod=vendor -count=1 -race -v ./...
