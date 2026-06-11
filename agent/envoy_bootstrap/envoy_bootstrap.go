@@ -38,6 +38,7 @@ import (
 	"github.com/aws/aws-app-mesh-agent/agent/envoy_bootstrap/metric_filter"
 	"github.com/aws/aws-app-mesh-agent/agent/envoy_bootstrap/netinfo"
 	"github.com/aws/aws-app-mesh-agent/agent/envoy_bootstrap/platforminfo"
+	"github.com/aws/aws-app-mesh-agent/agent/envoy_bootstrap/servicediscovery"
 	sdkConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-xray-sdk-go/strategy/sampling"
@@ -1479,6 +1480,15 @@ func buildMetadataForNode() (*structpb.Struct, error) {
 		log.Warnf("Could not collect listener info: %v", err)
 	} else {
 		for k, v := range listenerInfo {
+			metadata[k] = v
+		}
+	}
+
+	serviceDiscovery, err := servicediscovery.BuildMetadata()
+	if err != nil {
+		log.Warnf("Could not collect service discovery info: %v", err)
+	} else {
+		for k, v := range serviceDiscovery {
 			metadata[k] = v
 		}
 	}
