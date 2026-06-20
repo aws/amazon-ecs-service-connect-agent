@@ -681,6 +681,24 @@ metadata:
 `)
 }
 
+func TestBuildNodeMetadata_ServiceDiscovery(t *testing.T) {
+	setup()
+	os.Setenv("NAMESPACE_NAME", "my-namespace")
+	os.Setenv("NAMESPACE_ARN", "arn:aws:servicediscovery:us-west-2:123456789012:namespace/ns-12345")
+	defer os.Unsetenv("NAMESPACE_NAME")
+	defer os.Unsetenv("NAMESPACE_ARN")
+	metadata, err := buildMetadataForNode()
+	assert.Nil(t, err)
+	checkMessageSupersetMatch(t, buildNode("id", "cluster", metadata), `
+id: id
+cluster: cluster
+metadata:
+  aws.ecs.serviceconnect.ServiceDiscovery:
+    NamespaceName: my-namespace
+    NamespaceArn: arn:aws:servicediscovery:us-west-2:123456789012:namespace/ns-12345
+`)
+}
+
 func TestBuildNodeMetadata_StaticRuntimeMappingDefault(t *testing.T) {
 	setup()
 	metadata, err := buildMetadataForNode()
