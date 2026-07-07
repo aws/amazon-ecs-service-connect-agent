@@ -1,6 +1,7 @@
-# github.com/aws/aws-sdk-go v1.44.266
-## explicit; go 1.11
+# github.com/aws/aws-sdk-go v1.47.9
+## explicit; go 1.19
 github.com/aws/aws-sdk-go/aws
+github.com/aws/aws-sdk-go/aws/auth/bearer
 github.com/aws/aws-sdk-go/aws/awserr
 github.com/aws/aws-sdk-go/aws/awsutil
 github.com/aws/aws-sdk-go/aws/client
@@ -38,6 +39,7 @@ github.com/aws/aws-sdk-go/private/protocol/restjson
 github.com/aws/aws-sdk-go/private/protocol/xml/xmlutil
 github.com/aws/aws-sdk-go/service/sso
 github.com/aws/aws-sdk-go/service/sso/ssoiface
+github.com/aws/aws-sdk-go/service/ssooidc
 github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
 github.com/aws/aws-sdk-go/service/xray
@@ -113,7 +115,7 @@ github.com/aws/aws-sdk-go-v2/service/ssooidc/types
 github.com/aws/aws-sdk-go-v2/service/sts
 github.com/aws/aws-sdk-go-v2/service/sts/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/sts/types
-# github.com/aws/aws-xray-sdk-go v1.8.1
+# github.com/aws/aws-xray-sdk-go v1.8.5
 ## explicit; go 1.19
 github.com/aws/aws-xray-sdk-go/daemoncfg
 github.com/aws/aws-xray-sdk-go/internal/logger
@@ -275,7 +277,7 @@ golang.org/x/time/rate
 # google.golang.org/genproto/googleapis/api v0.0.0-20230526203410-71b5a4ffd15e
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/api/expr/v1alpha1
-# google.golang.org/genproto/googleapis/rpc v0.0.0-20230526203410-71b5a4ffd15e
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/protobuf v1.34.2
