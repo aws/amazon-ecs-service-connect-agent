@@ -28,17 +28,33 @@ const (
 
 const (
 	// TagSpecifier Regex for Service Connect
-	clusterNameRegex = "^appmesh(?:\\..+?\\..+?)*(\\.ClusterName\\.(.+?))(?:\\..+?\\..+?)*\\.(?:.+)$"
-	directionRegex   = "^appmesh(?:\\..+?\\..+?)*(\\.Direction\\.(.+?))(?:\\..+?\\..+?)*\\.(?:.+)$"
-	// Note that DiscoveryName and TargetDiscoveryName can contain "." unfortunately, so we aggressively match any
-	// character after ".".
+	// Stat names look like "appmesh.<key>.<value>...<key>.<value>.<metric>". Values can contain "."
+	// (e.g. NamespaceName), so a value runs until the next ".<known key>." or the
+	// last segment, which is the metric name. Since a value always ends at the next known key, a name
+	// can only be split into key/value pairs one way.
 	//
-	// According to the official doc (https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/metrics/v3/stats.proto#envoy-v3-api-msg-config-metrics-v3-tagspecifier), only after all tag specifiers are processed the tags will be removed from the name.
-	// For any intermediate tag specifier matching, it will leave it in the name for potential matching with additional tag specifiers.
-	// So we have to explicitly exclude other tag keywords in the regex for DiscoveryName and TargetDiscoveryName.
-	discoveryNameRegex       = "^appmesh(?:\\..+?\\..+?)*(\\.DiscoveryName\\.((?:(?!\\.(ClusterName|ServiceName|Direction)).)+))(?:\\..+?\\..+?)*\\.(?:.+)$"
-	serviceNameRegex         = "^appmesh(?:\\..+?\\..+?)*(\\.ServiceName\\.(.+?))(?:\\..+?\\..+?)*\\.(?:.+)$"
-	targetDiscoveryNameRegex = "^appmesh(?:\\..+?\\..+?)*(\\.TargetDiscoveryName\\.((?:(?!\\.(ClusterName|ServiceName|Direction)).)+))(?:\\..+?\\..+?)*\\.(?:.+)$"
+	// Envoy runs every specifier on the original name and strips the matched tags only after all of
+	// them have run, so each regex still sees the other tags. Every key that can appear in a stat
+	// name must be listed in scTagKeys. An unlisted key and its value end up inside the previous
+	// tag's value.
+	// https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/metrics/v3/stats.proto#envoy-v3-api-msg-config-metrics-v3-tagspecifier
+	scTagKeys = "(?:ClusterName|ServiceName|Direction|" +
+		"DiscoveryName|TargetDiscoveryName|" +
+		"AvailabilityZoneId|TargetAvailabilityZoneId|" +
+		"NamespaceName)"
+	scTagValue  = "(?:(?!\\." + scTagKeys + "\\.).)+"
+	scTagPair   = "\\." + scTagKeys + "\\." + scTagValue
+	scTagPrefix = "^appmesh(?:" + scTagPair + ")*?"
+	scTagSuffix = "(?:\\..*)?\\.[^.]+$"
+
+	serviceNameRegex              = scTagPrefix + "(\\.ServiceName\\.(" + scTagValue + "))" + scTagSuffix
+	clusterNameRegex              = scTagPrefix + "(\\.ClusterName\\.(" + scTagValue + "))" + scTagSuffix
+	directionRegex                = scTagPrefix + "(\\.Direction\\.(" + scTagValue + "))" + scTagSuffix
+	discoveryNameRegex            = scTagPrefix + "(\\.DiscoveryName\\.(" + scTagValue + "))" + scTagSuffix
+	targetDiscoveryNameRegex      = scTagPrefix + "(\\.TargetDiscoveryName\\.(" + scTagValue + "))" + scTagSuffix
+	namespaceNameRegex            = scTagPrefix + "(\\.NamespaceName\\.(" + scTagValue + "))" + scTagSuffix
+	availabilityZoneIdRegex       = scTagPrefix + "(\\.AvailabilityZoneId\\.(" + scTagValue + "))" + scTagSuffix
+	targetAvailabilityZoneIdRegex = scTagPrefix + "(\\.TargetAvailabilityZoneId\\.(" + scTagValue + "))" + scTagSuffix
 )
 
 const (
@@ -108,7 +124,6 @@ func AppendStatsTagRegexForServiceConnect(tags *[]*metrics.TagSpecifier) {
 				Regex: directionRegex,
 			},
 		}, {
-			// We ensure that DiscoveryName and TargetDiscoveryName are matched at last.
 			TagName: "DiscoveryName",
 			TagValue: &metrics.TagSpecifier_Regex{
 				Regex: discoveryNameRegex,
@@ -117,6 +132,21 @@ func AppendStatsTagRegexForServiceConnect(tags *[]*metrics.TagSpecifier) {
 			TagName: "TargetDiscoveryName",
 			TagValue: &metrics.TagSpecifier_Regex{
 				Regex: targetDiscoveryNameRegex,
+			},
+		}, {
+			TagName: "NamespaceName",
+			TagValue: &metrics.TagSpecifier_Regex{
+				Regex: namespaceNameRegex,
+			},
+		}, {
+			TagName: "AvailabilityZoneId",
+			TagValue: &metrics.TagSpecifier_Regex{
+				Regex: availabilityZoneIdRegex,
+			},
+		}, {
+			TagName: "TargetAvailabilityZoneId",
+			TagValue: &metrics.TagSpecifier_Regex{
+				Regex: targetAvailabilityZoneIdRegex,
 			},
 		},
 	}

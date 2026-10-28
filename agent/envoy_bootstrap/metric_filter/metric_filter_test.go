@@ -112,7 +112,7 @@ func TestAppendStatsTagRegexForServiceConnect(t *testing.T) {
 	os.Setenv("APPMESH_METRIC_EXTENSION_VERSION", "1")
 	tags := make([]*metrics.TagSpecifier, 0)
 	AppendStatsTagRegexForServiceConnect(&tags)
-	assert.Equal(t, 5, len(tags))
+	assert.Equal(t, 8, len(tags))
 
 	assert.Equal(t, "ServiceName", tags[0].TagName)
 	assert.Equal(t, serviceNameRegex, tags[0].GetRegex())
@@ -128,5 +128,14 @@ func TestAppendStatsTagRegexForServiceConnect(t *testing.T) {
 
 	assert.Equal(t, "TargetDiscoveryName", tags[4].TagName)
 	assert.Equal(t, targetDiscoveryNameRegex, tags[4].GetRegex())
+
+	assert.Equal(t, "NamespaceName", tags[5].TagName)
+	assert.Equal(t, namespaceNameRegex, tags[5].GetRegex())
+
+	assert.Equal(t, "AvailabilityZoneId", tags[6].TagName)
+	assert.Equal(t, availabilityZoneIdRegex, tags[6].GetRegex())
+
+	assert.Equal(t, "TargetAvailabilityZoneId", tags[7].TagName)
+	assert.Equal(t, targetAvailabilityZoneIdRegex, tags[7].GetRegex())
 
 }

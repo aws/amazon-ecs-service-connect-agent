@@ -1927,15 +1927,21 @@ func TestAppendStats_EnableMetricExtension_ServiceConnect(t *testing.T) {
 statsConfig:
   statsTags:
     - tagName: ServiceName
-      regex: ^appmesh(?:\..+?\..+?)*(\.ServiceName\.(.+?))(?:\..+?\..+?)*\.(?:.+)$
+      regex: ^appmesh(?:\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.(?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+)*?(\.ServiceName\.((?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+))(?:\..*)?\.[^.]+$
     - tagName: ClusterName
-      regex: ^appmesh(?:\..+?\..+?)*(\.ClusterName\.(.+?))(?:\..+?\..+?)*\.(?:.+)$
+      regex: ^appmesh(?:\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.(?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+)*?(\.ClusterName\.((?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+))(?:\..*)?\.[^.]+$
     - tagName: Direction
-      regex: ^appmesh(?:\..+?\..+?)*(\.Direction\.(.+?))(?:\..+?\..+?)*\.(?:.+)$
+      regex: ^appmesh(?:\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.(?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+)*?(\.Direction\.((?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+))(?:\..*)?\.[^.]+$
     - tagName: DiscoveryName
-      regex: ^appmesh(?:\..+?\..+?)*(\.DiscoveryName\.((?:(?!\.(ClusterName|ServiceName|Direction)).)+))(?:\..+?\..+?)*\.(?:.+)$
+      regex: ^appmesh(?:\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.(?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+)*?(\.DiscoveryName\.((?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+))(?:\..*)?\.[^.]+$
     - tagName: TargetDiscoveryName
-      regex: ^appmesh(?:\..+?\..+?)*(\.TargetDiscoveryName\.((?:(?!\.(ClusterName|ServiceName|Direction)).)+))(?:\..+?\..+?)*\.(?:.+)$
+      regex: ^appmesh(?:\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.(?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+)*?(\.TargetDiscoveryName\.((?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+))(?:\..*)?\.[^.]+$
+    - tagName: NamespaceName
+      regex: ^appmesh(?:\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.(?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+)*?(\.NamespaceName\.((?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+))(?:\..*)?\.[^.]+$
+    - tagName: AvailabilityZoneId
+      regex: ^appmesh(?:\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.(?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+)*?(\.AvailabilityZoneId\.((?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+))(?:\..*)?\.[^.]+$
+    - tagName: TargetAvailabilityZoneId
+      regex: ^appmesh(?:\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.(?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+)*?(\.TargetAvailabilityZoneId\.((?:(?!\.(?:ClusterName|ServiceName|Direction|DiscoveryName|TargetDiscoveryName|AvailabilityZoneId|TargetAvailabilityZoneId|NamespaceName)\.).)+))(?:\..*)?\.[^.]+$
 `)
 }
 
